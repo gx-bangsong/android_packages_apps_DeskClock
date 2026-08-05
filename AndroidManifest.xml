@@ -99,6 +99,22 @@
             android:theme="@style/Theme.DeskClock.Settings" />
 
         <activity
+            android:name=".workdays.WorkdayTypeActivity"
+            android:excludeFromRecents="true"
+            android:label="@string/workday_type_title"
+            android:parentActivityName=".DeskClock"
+            android:taskAffinity=""
+            android:theme="@style/Theme.DeskClock.Settings" />
+
+        <activity
+            android:name=".workdays.ShiftScheduleActivity"
+            android:excludeFromRecents="true"
+            android:label="@string/shift_rotation"
+            android:parentActivityName=".DeskClock"
+            android:taskAffinity=""
+            android:theme="@style/Theme.DeskClock.Settings" />
+
+        <activity
             android:name=".HandleShortcuts"
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"

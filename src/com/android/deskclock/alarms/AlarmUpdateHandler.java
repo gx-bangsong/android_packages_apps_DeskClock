@@ -203,8 +203,12 @@ public final class AlarmUpdateHandler {
 
     private AlarmInstance setupAlarmInstance(Alarm alarm) {
         final ContentResolver cr = mAppContext.getContentResolver();
-        AlarmInstance newInstance = alarm.createInstanceAfter(Calendar.getInstance());
-        newInstance = AlarmInstance.addInstance(cr, newInstance);
+        final AlarmInstance newInstance = alarm.createInstanceAfter(Calendar.getInstance());
+        if (newInstance == null) {
+            // No valid next firing time exists (e.g. every shift day is disabled).
+            return null;
+        }
+        AlarmInstance.addInstance(cr, newInstance);
         // Register instance to state manager
         AlarmStateManager.registerInstance(mAppContext, newInstance, true);
         return newInstance;

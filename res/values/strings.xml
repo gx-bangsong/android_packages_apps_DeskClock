@@ -1054,4 +1054,52 @@
     -->
     <string name="alarm_is_snoozed"><xliff:g id="alarm_time" example="14:20">%s</xliff:g> alarm snoozed for 10 minutes</string>
 
+    <!-- Workday types -->
+    <string name="workday_type_title">Workday type</string>
+    <string name="workday_type_summary">Intelligently skip legal holidays and ring on make-up workdays</string>
+    <string name="workday_type_none">Off</string>
+    <string name="workday_type_statutory">Statutory workdays</string>
+    <string name="workday_type_statutory_summary">No ring on legal holidays, rings on make-up workdays, rings on normal workdays</string>
+    <string name="workday_type_single_off">Single day off (Sunday only)</string>
+    <string name="workday_type_single_off_summary">Work Monday through Saturday, rest Sunday</string>
+    <string name="workday_type_big_small_sun">Alternating weeks (rest Sunday this week)</string>
+    <string name="workday_type_big_small_sun_summary">Weeks alternate between big and small; this week rests Sunday</string>
+    <string name="workday_type_big_small_weekend">Alternating weeks (rest Saturday and Sunday this week)</string>
+    <string name="workday_type_big_small_weekend_summary">This week rests Saturday and Sunday, then weeks alternate</string>
+    <string name="workday_type_shift">Shift rotation</string>
+    <string name="workday_type_shift_summary">Configure a repeating shift cycle schedule</string>
+
+    <!-- Shift rotation editor -->
+    <string name="shift_rotation">Shift rotation</string>
+    <string name="cancel">Cancel</string>
+    <string name="done">Done</string>
+    <string name="shift_cycle_title">Shift cycle</string>
+    <string name="shift_cycle_days_value">%d days</string>
+    <string name="shift_start_date_title">Shift start date</string>
+    <string name="shift_skip_holiday_title">No ring on legal holidays</string>
+    <string name="shift_skip_holiday_summary">Legal holidays in the selected dates stay silent</string>
+    <string name="shift_current_period_title">Current period</string>
+    <string name="shift_current_period_value">%1$s - %2$s</string>
+    <string name="shift_days_section_title">Daily shift entries</string>
+    <string name="shift_day_title">Day %d</string>
+    <string name="shift_today">Today</string>
+    <string name="shift_rest">Rest</string>
+    <string name="shift_all_days_off_warning">No shift days are enabled; this alarm will not ring</string>
+
+    <!-- Quick timers -->
+    <string name="add_quick_timer_title">Add quick timer</string>
+    <string name="quick_timer_label_title">Label</string>
+    <string name="quick_timer_label_format">%1$s (%2$s)</string>
+    <string name="quick_timer_invalid_duration">Enter a valid duration</string>
+
+    <!-- Holiday data -->
+    <string name="holiday_data_category_title">Holiday data</string>
+    <string name="holiday_data_url_title">Holiday data URL</string>
+    <string name="holiday_data_url_summary">URL of the legal holiday and make-up workday data</string>
+    <string name="holiday_data_url_dialog_title">Holiday data URL</string>
+    <string name="update_holiday_data_title">Update holiday data</string>
+    <string name="update_holiday_data_summary">Manually update legal holiday and workday data</string>
+    <string name="update_holiday_data_success">Holiday data updated</string>
+    <string name="update_holiday_data_failure">Holiday data update failed: %1$s</string>
+
 </resources>

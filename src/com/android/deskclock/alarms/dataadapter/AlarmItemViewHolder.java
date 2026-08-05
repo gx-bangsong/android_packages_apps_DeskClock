@@ -34,6 +34,8 @@ import com.android.deskclock.data.Weekdays;
 import com.android.deskclock.provider.Alarm;
 import com.android.deskclock.provider.AlarmInstance;
 import com.android.deskclock.widget.EllipsizeLayout;
+import com.android.deskclock.workdays.WorkdayType;
+import com.android.deskclock.workdays.WorkdayTypeUtils;
 import com.android.deskclock.widget.TextTime;
 import com.google.android.material.button.MaterialButton;
 
@@ -125,6 +127,14 @@ public abstract class AlarmItemViewHolder extends ItemAdapter.ItemViewHolder<Ala
     }
 
     protected void bindRepeatText(Context context, Alarm alarm) {
+        if (alarm.workdayType != WorkdayType.NONE) {
+            // Alarms with a workday type show the type label instead of the weekly repeat
+            // summary, since the workday logic governs when the alarm rings.
+            final String label = WorkdayTypeUtils.getLabel(context, alarm.workdayType);
+            daysOfWeek.setText(label);
+            daysOfWeek.setContentDescription(label);
+            return;
+        }
         if (alarm.daysOfWeek.isRepeating()) {
             final Weekdays.Order weekdayOrder = DataModel.getDataModel().getWeekdayOrder();
             final String daysOfWeekText = alarm.daysOfWeek.toString(context, weekdayOrder);

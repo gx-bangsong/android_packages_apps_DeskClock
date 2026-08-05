@@ -134,11 +134,75 @@ public final class ClockContract {
          * <p>Type: INTEGER</p>
          */
         String DELETE_AFTER_USE = "delete_after_use";
+
+        /**
+         * The workday type assigned to this alarm; one of the constants of
+         * {@link com.android.deskclock.workdays.WorkdayType}. Zero (the default) means the
+         * alarm follows the plain weekly/one-time schedule.
+         * <p>Type: INTEGER</p>
+         */
+        String WORKDAY_TYPE = "workday_type";
+
+        /**
+         * The number of days in one shift-rotation cycle; used only when
+         * {@link #WORKDAY_TYPE} is {@link com.android.deskclock.workdays.WorkdayType#SHIFT}.
+         * <p>Type: INTEGER</p>
+         */
+        String SHIFT_CYCLE_DAYS = "shift_cycle_days";
+
+        /**
+         * The date of day 1 of the shift-rotation cycle, stored as a local date in
+         * {@code yyyy-MM-dd} form; used only when {@link #WORKDAY_TYPE} is
+         * {@link com.android.deskclock.workdays.WorkdayType#SHIFT}.
+         * <p>Type: TEXT</p>
+         */
+        String SHIFT_START_DATE = "shift_start_date";
+
+        /**
+         * Whether legal holidays are skipped for this shift alarm; make-up workdays still ring.
+         * <p>Type: BOOLEAN</p>
+         */
+        String SHIFT_SKIP_HOLIDAY = "shift_skip_holiday";
+
+        /**
+         * The per-day enabled state of the shift cycle encoded as a string of '1' and '0'
+         * characters (index 0 = day 1 of the cycle); used only when {@link #WORKDAY_TYPE} is
+         * {@link com.android.deskclock.workdays.WorkdayType#SHIFT}.
+         * <p>Type: TEXT</p>
+         */
+        String SHIFT_DAYS_MASK = "shift_days_mask";
     }
 
     /**
-     * Constants for the Instance table, which contains the state of each alarm.
+     * Constants for the Holiday table, which stores the legal holidays and make-up workdays
+     * downloaded from a user-configurable data source.
      */
+    protected interface HolidayColumns extends BaseColumns {
+        /**
+         * The display name of the holiday.
+         * <p>Type: TEXT</p>
+         */
+        String NAME = "name";
+
+        /**
+         * The first day of the holiday, stored as {@code yyyy-MM-dd}.
+         * <p>Type: TEXT</p>
+         */
+        String START_DATE = "start_date";
+
+        /**
+         * The last day of the holiday, stored as {@code yyyy-MM-dd}.
+         * <p>Type: TEXT</p>
+         */
+        String END_DATE = "end_date";
+
+        /**
+         * The make-up workdays of the holiday, stored as a JSON array of {@code yyyy-MM-dd}
+         * strings.
+         * <p>Type: TEXT</p>
+         */
+        String COMP_DAYS = "comp_days";
+    }
     protected interface InstancesColumns extends AlarmSettingColumns, BaseColumns {
         /**
          * The content:// style URL for this table.

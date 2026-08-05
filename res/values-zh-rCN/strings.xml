@@ -413,4 +413,52 @@
     <string name="pick_alarm_to_dismiss" msgid="5408769235866082896">"请选择要关闭的闹钟"</string>
     <string name="no_firing_alarms" msgid="4986161963178722289">"目前没有正在响铃的闹钟"</string>
     <string name="alarm_is_snoozed" msgid="7044644119744928846">"<xliff:g id="ALARM_TIME">%s</xliff:g> 的闹钟已延后 10 分钟"</string>
+
+    <!-- 工作日类型 -->
+    <string name="workday_type_title">工作日类型</string>
+    <string name="workday_type_summary">将智能跳过法定节假日并补充调休上班日闹钟</string>
+    <string name="workday_type_none">关闭</string>
+    <string name="workday_type_statutory">法定工作日</string>
+    <string name="workday_type_statutory_summary">法定节假日不响铃，调休补班日可以响铃，普通工作日正常响铃</string>
+    <string name="workday_type_single_off">单休制（仅休周日）</string>
+    <string name="workday_type_single_off_summary">周一至周六工作，周日休息</string>
+    <string name="workday_type_big_small_sun">大小周制（本周休周日）</string>
+    <string name="workday_type_big_small_sun_summary">按周次进行大小周切换，当前周休周日</string>
+    <string name="workday_type_big_small_weekend">大小周制（本周休周六、日）</string>
+    <string name="workday_type_big_small_weekend_summary">当前周休周六、日，后续按照大小周规则切换</string>
+    <string name="workday_type_shift">轮班制</string>
+    <string name="workday_type_shift_summary">进入轮班制编辑页面，配置轮班周期和每日开关</string>
+
+    <!-- 轮班制编辑 -->
+    <string name="shift_rotation">轮班制</string>
+    <string name="cancel">取消</string>
+    <string name="done">完成</string>
+    <string name="shift_cycle_title">轮班周期</string>
+    <string name="shift_cycle_days_value">%d 天</string>
+    <string name="shift_start_date_title">轮班开始日期</string>
+    <string name="shift_skip_holiday_title">法定节假日不响铃</string>
+    <string name="shift_skip_holiday_summary">已勾选日期中识别法定节假日不响铃</string>
+    <string name="shift_current_period_title">当前周期</string>
+    <string name="shift_current_period_value">%1$s - %2$s</string>
+    <string name="shift_days_section_title">每日轮班条目</string>
+    <string name="shift_day_title">第 %d 天</string>
+    <string name="shift_today">今天</string>
+    <string name="shift_rest">休息</string>
+    <string name="shift_all_days_off_warning">未启用任何轮班日，该闹钟将不会响铃</string>
+
+    <!-- Quick Timer 快捷计时器 -->
+    <string name="add_quick_timer_title">添加快捷计时器</string>
+    <string name="quick_timer_label_title">名称</string>
+    <string name="quick_timer_label_format">%1$s (%2$s)</string>
+    <string name="quick_timer_invalid_duration">请输入有效的时长</string>
+
+    <!-- 节假日数据 -->
+    <string name="holiday_data_category_title">节假日数据</string>
+    <string name="holiday_data_url_title">节假日数据 URL</string>
+    <string name="holiday_data_url_summary">设置法定节假日和调休上班日数据的 URL</string>
+    <string name="holiday_data_url_dialog_title">节假日数据 URL</string>
+    <string name="update_holiday_data_title">更新节假日数据</string>
+    <string name="update_holiday_data_summary">手动更新法定节假日和调休上班日数据</string>
+    <string name="update_holiday_data_success">节假日数据更新成功</string>
+    <string name="update_holiday_data_failure">节假日数据更新失败：%1$s</string>
 </resources>

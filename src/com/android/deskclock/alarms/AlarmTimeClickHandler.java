@@ -34,6 +34,7 @@ import com.android.deskclock.events.Events;
 import com.android.deskclock.provider.Alarm;
 import com.android.deskclock.provider.AlarmInstance;
 import com.android.deskclock.ringtone.RingtonePickerActivity;
+import com.android.deskclock.workdays.WorkdayTypeActivity;
 
 import java.util.Calendar;
 
@@ -78,6 +79,18 @@ public final class AlarmTimeClickHandler {
         outState.putBundle(KEY_PREVIOUS_DAY_MAP, mPreviousDaysOfWeekMap);
     }
 
+    /**
+     * Opens the workday type editor for the given alarm.
+     *
+     * @param alarm the alarm whose workday type is being edited
+     */
+    public void onWorkdayTypeClicked(Alarm alarm) {
+        final Context context = mFragment.getActivity();
+        if (context != null) {
+            context.startActivity(WorkdayTypeActivity.createIntent(context, alarm.id));
+        }
+    }
+
     public void setAlarmEnabled(Alarm alarm, boolean newState) {
         if (newState != alarm.enabled) {
             alarm.enabled = newState;
@@ -115,7 +128,7 @@ public final class AlarmTimeClickHandler {
 
         // if the change altered the next scheduled alarm time, tell the user
         final Calendar newNextAlarmTime = alarm.getNextAlarmTime(now);
-        final boolean popupToast = !oldNextAlarmTime.equals(newNextAlarmTime);
+        final boolean popupToast = !java.util.Objects.equals(oldNextAlarmTime, newNextAlarmTime);
         mAlarmUpdateHandler.asyncUpdateAlarm(alarm, popupToast, false);
     }
 

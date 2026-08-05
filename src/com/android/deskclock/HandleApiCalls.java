@@ -37,6 +37,7 @@ import android.provider.AlarmClock;
 import android.text.TextUtils;
 import android.text.format.DateFormat;
 
+import com.android.deskclock.LogUtils;
 import com.android.deskclock.alarms.AlarmStateManager;
 import com.android.deskclock.controller.Controller;
 import com.android.deskclock.data.DataModel;
@@ -368,6 +369,10 @@ public class HandleApiCalls extends Activity {
         // Schedule the next instance.
         final Calendar now = DataModel.getDataModel().getCalendar();
         final AlarmInstance alarmInstance = alarm.createInstanceAfter(now);
+        if (alarmInstance == null) {
+            LogUtils.e("Unable to schedule alarm %d: no valid next alarm time", alarm.id);
+            return;
+        }
         setupInstance(alarmInstance, skipUi);
 
         final String time = DateFormat.getTimeFormat(this)

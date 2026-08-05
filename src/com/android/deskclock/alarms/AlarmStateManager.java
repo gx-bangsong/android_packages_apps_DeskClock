@@ -243,8 +243,19 @@ public final class AlarmStateManager extends BroadcastReceiver {
             // and has already been fired, schedule the subsequent instance.
             AlarmInstance nextRepeatedInstance = alarm.createInstanceAfter(getCurrentTime());
             if (instance.mAlarmState > AlarmInstance.FIRED_STATE
+                    && nextRepeatedInstance != null
                     && nextRepeatedInstance.getAlarmTime().equals(instance.getAlarmTime())) {
                 nextRepeatedInstance = alarm.createInstanceAfter(instance.getAlarmTime());
+            }
+
+            if (nextRepeatedInstance == null) {
+                // No valid next firing time exists (e.g. every day of the shift cycle is
+                // disabled); disable the alarm instead of leaving a dangling enabled state.
+                LogUtils.i("No valid next firing time for repeating alarm %d; disabling it",
+                        alarm.id);
+                alarm.enabled = false;
+                Alarm.updateAlarm(cr, alarm);
+                return;
             }
 
             LogUtils.i("Creating new instance for repeating alarm " + alarm.id + " at " +
@@ -756,6 +767,14 @@ public final class AlarmStateManager extends BroadcastReceiver {
             if (currentTime.before(priorAlarmTime) || currentTime.after(missedTTLTime)) {
                 final Calendar oldAlarmTime = instance.getAlarmTime();
                 final Calendar newAlarmTime = alarm.getNextAlarmTime(currentTime);
+                if (newAlarmTime == null) {
+                    // No valid next firing time exists (e.g. every day of the shift cycle is
+                    // disabled); remove the stale instance.
+                    LogUtils.i("No valid next alarm time for alarm %d after time change; "
+                            + "removing instance %s", alarm.id, instance.mId);
+                    AlarmStateManager.deleteInstanceAndUpdateParent(context, instance);
+                    continue;
+                }
                 final CharSequence oldTime = DateFormat.format("MM/dd/yyyy hh:mm a", oldAlarmTime);
                 final CharSequence newTime = DateFormat.format("MM/dd/yyyy hh:mm a", newAlarmTime);
                 LogUtils.i("A time change has caused an existing alarm scheduled to fire at %s to" +

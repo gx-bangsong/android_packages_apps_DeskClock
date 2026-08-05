@@ -48,6 +48,8 @@ import com.android.deskclock.events.Events;
 import com.android.deskclock.provider.Alarm;
 import com.android.deskclock.provider.AlarmInstance;
 import com.android.deskclock.uidata.UiDataModel;
+import com.android.deskclock.workdays.WorkdayType;
+import com.android.deskclock.workdays.WorkdayTypeUtils;
 
 import java.util.List;
 
@@ -62,6 +64,7 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
     private final CompoundButton[] dayButtons;
     private final CheckBox vibrate;
     private final TextView ringtone;
+    private final TextView workdayTypeRow;
     private final TextView delete;
 
     private final boolean mHasVibrator;
@@ -74,6 +77,7 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
         delete = itemView.findViewById(R.id.delete);
         vibrate = itemView.findViewById(R.id.vibrate_onoff);
         ringtone = itemView.findViewById(R.id.choose_ringtone);
+        workdayTypeRow = itemView.findViewById(R.id.workday_type_row);
         editLabel = itemView.findViewById(R.id.edit_label);
         repeatDays = itemView.findViewById(R.id.repeat_days);
 
@@ -123,6 +127,9 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
         // Ringtone editor handler
         ringtone.setOnClickListener(v ->
                 getAlarmTimeClickHandler().onRingtoneClicked(context, getItemHolder().item));
+        // Workday type editor handler
+        workdayTypeRow.setOnClickListener(v ->
+                getAlarmTimeClickHandler().onWorkdayTypeClicked(getItemHolder().item));
         // Delete alarm handler
         delete.setOnClickListener(v -> {
             getAlarmTimeClickHandler().onDeleteClicked(getItemHolder());
@@ -152,6 +159,7 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
         bindDaysOfWeekButtons(alarm, context);
         bindVibrator(alarm);
         bindRingtone(context, alarm);
+        bindWorkdayType(context, alarm);
         bindPreemptiveDismissButton(context, alarm, alarmInstance);
         bindRepeatText(context, alarm);
         bindAnnotations(alarm);
@@ -213,6 +221,18 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
             vibrate.setVisibility(View.VISIBLE);
             vibrate.setChecked(alarm.vibrate);
         }
+    }
+
+    private void bindWorkdayType(Context context, Alarm alarm) {
+        final String label = WorkdayTypeUtils.getLabel(context, alarm.workdayType);
+        workdayTypeRow.setText(label);
+        workdayTypeRow.setContentDescription(
+                context.getString(R.string.workday_type_title) + " " + label);
+
+        // Shift alarms follow the cycle schedule; the weekly repeat buttons are meaningless and
+        // would only confuse the user, so hide them.
+        repeatDays.setVisibility(alarm.workdayType == WorkdayType.SHIFT
+                ? View.GONE : View.VISIBLE);
     }
 
     private void bindAnnotations(Alarm alarm) {
@@ -278,6 +298,8 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
                 .setDuration(shortDuration);
         final Animator ringtoneAnimation = ObjectAnimator.ofFloat(ringtone, View.ALPHA, 0f)
                 .setDuration(shortDuration);
+        final Animator workdayTypeRowAnimation = ObjectAnimator.ofFloat(workdayTypeRow,
+                View.ALPHA, 0f).setDuration(shortDuration);
         final Animator dismissAnimation = ObjectAnimator.ofFloat(preemptiveDismissButton,
                 View.ALPHA, 0f).setDuration(shortDuration);
         final Animator deleteAnimation = ObjectAnimator.ofFloat(delete, View.ALPHA, 0f)
@@ -299,6 +321,7 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
         startDelay += delayIncrement;
         vibrateAnimation.setStartDelay(startDelay);
         ringtoneAnimation.setStartDelay(startDelay);
+        workdayTypeRowAnimation.setStartDelay(startDelay);
         startDelay += delayIncrement;
         if (daysVisible) {
             repeatDaysAnimation.setStartDelay(startDelay);
@@ -306,8 +329,9 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
 
         final AnimatorSet animatorSet = new AnimatorSet();
         animatorSet.playTogether(backgroundAnimator, boundsAnimator,
-                repeatDaysAnimation, vibrateAnimation, ringtoneAnimation, editLabelAnimation,
-                deleteAnimation, dismissAnimation, switchAnimator, clockAnimator, ellipseAnimator);
+                repeatDaysAnimation, vibrateAnimation, ringtoneAnimation, workdayTypeRowAnimation,
+                editLabelAnimation, deleteAnimation, dismissAnimation, switchAnimator, clockAnimator,
+                ellipseAnimator);
         animatorSet.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationStart(Animator animation) {
@@ -355,6 +379,8 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
                 .setDuration(longDuration);
         final Animator ringtoneAnimation = ObjectAnimator.ofFloat(ringtone, View.ALPHA, 1f)
                 .setDuration(longDuration);
+        final Animator workdayTypeRowAnimation = ObjectAnimator.ofFloat(workdayTypeRow,
+                View.ALPHA, 1f).setDuration(longDuration);
         final Animator dismissAnimation = ObjectAnimator.ofFloat(preemptiveDismissButton,
                 View.ALPHA, 1f).setDuration(longDuration);
         final Animator vibrateAnimation = ObjectAnimator.ofFloat(vibrate, View.ALPHA, 1f)
@@ -376,6 +402,7 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
             startDelay += delayIncrement;
         }
         ringtoneAnimation.setStartDelay(startDelay);
+        workdayTypeRowAnimation.setStartDelay(startDelay);
         vibrateAnimation.setStartDelay(startDelay);
         startDelay += delayIncrement;
         editLabelAnimation.setStartDelay(startDelay);
@@ -388,8 +415,8 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
 
         final AnimatorSet animatorSet = new AnimatorSet();
         animatorSet.playTogether(backgroundAnimator, boundsAnimator,
-                repeatDaysAnimation, vibrateAnimation, ringtoneAnimation, editLabelAnimation,
-                deleteAnimation, dismissAnimation);
+                repeatDaysAnimation, vibrateAnimation, ringtoneAnimation, workdayTypeRowAnimation,
+                editLabelAnimation, deleteAnimation, dismissAnimation);
         return animatorSet;
     }
 
@@ -410,6 +437,7 @@ public final class ExpandedAlarmViewHolder extends AlarmItemViewHolder {
         repeatDays.setAlpha(alpha);
         preemptiveDismissButton.setAlpha(alpha);
         daysOfWeek.setAlpha(alpha);
+        workdayTypeRow.setAlpha(alpha);
     }
 
     public static class Factory implements ItemAdapter.ItemViewHolder.Factory {

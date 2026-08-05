@@ -25,6 +25,7 @@ import android.os.Bundle;
 import android.os.Vibrator;
 import android.provider.Settings;
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -42,6 +43,7 @@ import com.android.deskclock.data.DataModel;
 import com.android.deskclock.data.TimeZones;
 import com.android.deskclock.data.Weekdays;
 import com.android.deskclock.events.Events;
+import com.android.deskclock.holiday.HolidayRepository;
 import com.android.deskclock.ringtone.RingtonePickerActivity;
 import com.android.deskclock.widget.ToolbarBaseActivity;
 
@@ -68,6 +70,8 @@ public final class SettingsActivity extends ToolbarBaseActivity {
     public static final String KEY_WEEK_START = "week_start";
     public static final String KEY_FLIP_ACTION = "flip_action";
     public static final String KEY_SHAKE_ACTION = "shake_action";
+    public static final String KEY_HOLIDAY_DATA_URL = "holiday_data_url";
+    public static final String KEY_UPDATE_HOLIDAY_DATA = "update_holiday_data";
 
     public static final String DEFAULT_VOLUME_BEHAVIOR = "0";
     public static final String VOLUME_BEHAVIOR_SNOOZE = "1";
@@ -163,6 +167,13 @@ public final class SettingsActivity extends ToolbarBaseActivity {
                 case KEY_TIMER_RINGTONE:
                     pref.setSummary(DataModel.getDataModel().getTimerRingtoneTitle());
                     break;
+                case KEY_HOLIDAY_DATA_URL:
+                    final HolidayRepository repository = HolidayRepository.getInstanceOrNull();
+                    if (repository != null) {
+                        repository.setHolidayDataUrl((String) newValue);
+                        pref.setSummary(repository.getHolidayDataUrl());
+                    }
+                    break;
             }
             // Set result so DeskClock knows to refresh itself
             getActivity().setResult(RESULT_OK);
@@ -202,9 +213,34 @@ public final class SettingsActivity extends ToolbarBaseActivity {
                 case KEY_TIMER_RINGTONE:
                     startActivity(RingtonePickerActivity.createTimerRingtonePickerIntent(context));
                     return true;
+                case KEY_UPDATE_HOLIDAY_DATA:
+                    updateHolidayData(pref);
+                    return true;
             }
 
             return false;
+        }
+
+        /**
+         * Runs a manual holiday data update on a background thread. The preference is disabled
+         * while the update is in flight and the outcome is reported with a toast; on failure the
+         * previous dataset is kept.
+         */
+        private void updateHolidayData(final Preference pref) {
+            final Context appContext = context.getApplicationContext();
+            HolidayRepository.init(appContext);
+            final HolidayRepository repository = HolidayRepository.getInstanceOrNull();
+            if (repository == null) {
+                return;
+            }
+            pref.setEnabled(false);
+            repository.updateHolidayData((success, errorMessage) -> {
+                pref.setEnabled(true);
+                final String message = success
+                        ? getString(R.string.update_holiday_data_success)
+                        : getString(R.string.update_holiday_data_failure, errorMessage);
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show();
+            });
         }
 
         @Override
@@ -307,6 +343,20 @@ public final class SettingsActivity extends ToolbarBaseActivity {
 
             final ListPreference shakeActionPref = findPreference(KEY_SHAKE_ACTION);
             setupFlipOrShakeAction(shakeActionPref);
+
+            final Preference holidayDataUrlPref = findPreference(KEY_HOLIDAY_DATA_URL);
+            if (holidayDataUrlPref != null) {
+                final HolidayRepository repository = HolidayRepository.getInstanceOrNull();
+                holidayDataUrlPref.setSummary(repository != null
+                        ? repository.getHolidayDataUrl()
+                        : getString(R.string.holiday_data_url_summary));
+                holidayDataUrlPref.setOnPreferenceChangeListener(this);
+            }
+
+            final Preference updateHolidayDataPref = findPreference(KEY_UPDATE_HOLIDAY_DATA);
+            if (updateHolidayDataPref != null) {
+                updateHolidayDataPref.setOnPreferenceClickListener(this);
+            }
         }
 
         private void setupFlipOrShakeAction(ListPreference preference) {

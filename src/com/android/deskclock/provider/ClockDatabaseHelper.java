@@ -34,7 +34,7 @@ import java.util.Calendar;
  * Helper class for opening the database from multiple providers.  Also provides
  * some common functionality.
  */
-class ClockDatabaseHelper extends SQLiteOpenHelper {
+public class ClockDatabaseHelper extends SQLiteOpenHelper {
     /**
      * Original Clock Database.
      **/
@@ -72,6 +72,15 @@ class ClockDatabaseHelper extends SQLiteOpenHelper {
      */
     private static final int VERSION_11 = 12;
 
+    /**
+     * Added workday type and shift-rotation columns to the alarms table.
+     * Added the holiday table.
+     */
+    private static final int VERSION_12 = 13;
+
+    /** The current database version. */
+    private static final int DATABASE_VERSION = VERSION_12;
+
     // This creates a default alarm at 8:30 for every Mon,Tue,Wed,Thu,Fri
     private static final String DEFAULT_ALARM_1 = "(8, 30, 31, 0, 1, '', NULL, 0, 0);";
 
@@ -83,7 +92,24 @@ class ClockDatabaseHelper extends SQLiteOpenHelper {
     static final String OLD_ALARMS_TABLE_NAME = "alarms";
     static final String ALARMS_TABLE_NAME = "alarm_templates";
     static final String INSTANCES_TABLE_NAME = "alarm_instances";
+    static final String HOLIDAY_TABLE_NAME = "holiday";
     private static final String SELECTED_CITIES_TABLE_NAME = "selected_cities";
+
+    /** Shared helper instance used by components outside the provider package. */
+    private static ClockDatabaseHelper sInstance;
+
+    /**
+     * @return a shared helper opened on the device-protected database file (the same file used by
+     *         {@link com.android.deskclock.provider.ClockProvider})
+     */
+    public static synchronized ClockDatabaseHelper getInstance(Context context) {
+        if (sInstance == null) {
+            final Context storageContext =
+                    context.getApplicationContext().createDeviceProtectedStorageContext();
+            sInstance = new ClockDatabaseHelper(storageContext);
+        }
+        return sInstance;
+    }
 
     private static void createAlarmsTable(SQLiteDatabase db, String alarmsTableName) {
         db.execSQL("CREATE TABLE " + alarmsTableName + " (" +
@@ -96,8 +122,46 @@ class ClockDatabaseHelper extends SQLiteOpenHelper {
                 ClockContract.AlarmsColumns.LABEL + " TEXT NOT NULL, " +
                 ClockContract.AlarmsColumns.RINGTONE + " TEXT, " +
                 ClockContract.AlarmsColumns.DELETE_AFTER_USE + " INTEGER NOT NULL DEFAULT 0, " +
-                ClockContract.AlarmsColumns.INCREASING_VOLUME + " INTEGER NOT NULL DEFAULT 0);");
+                ClockContract.AlarmsColumns.INCREASING_VOLUME + " INTEGER NOT NULL DEFAULT 0, " +
+                ClockContract.AlarmsColumns.WORKDAY_TYPE + " INTEGER NOT NULL DEFAULT 0, " +
+                ClockContract.AlarmsColumns.SHIFT_CYCLE_DAYS + " INTEGER NOT NULL DEFAULT 7, " +
+                ClockContract.AlarmsColumns.SHIFT_START_DATE + " TEXT NOT NULL DEFAULT '', " +
+                ClockContract.AlarmsColumns.SHIFT_SKIP_HOLIDAY + " INTEGER NOT NULL DEFAULT 0, " +
+                ClockContract.AlarmsColumns.SHIFT_DAYS_MASK + " TEXT NOT NULL DEFAULT '');");
         LogUtils.i("Alarms Table created");
+    }
+
+    private static void createHolidayTable(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + HOLIDAY_TABLE_NAME + " (" +
+                ClockContract.HolidayColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                ClockContract.HolidayColumns.NAME + " TEXT NOT NULL DEFAULT '', " +
+                ClockContract.HolidayColumns.START_DATE + " TEXT NOT NULL, " +
+                ClockContract.HolidayColumns.END_DATE + " TEXT NOT NULL, " +
+                ClockContract.HolidayColumns.COMP_DAYS + " TEXT NOT NULL DEFAULT '[]');");
+        LogUtils.i("Holiday table created");
+    }
+
+    /**
+     * Adds a column to a table if it does not already exist. This is required because some
+     * upgrade paths recreate the alarms table (which already contains the new columns) before
+     * this migration step runs.
+     */
+    private static void addColumnIfMissing(SQLiteDatabase db, String tableName, String column,
+            String definition) {
+        boolean exists = false;
+        try (Cursor cursor = db.rawQuery("PRAGMA table_info(" + tableName + ")", null)) {
+            if (cursor != null) {
+                while (cursor.moveToNext()) {
+                    if (column.equals(cursor.getString(1))) {
+                        exists = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!exists) {
+            db.execSQL("ALTER TABLE " + tableName + " ADD COLUMN " + column + " " + definition);
+        }
     }
 
     private static void createInstanceTable(SQLiteDatabase db, String instanceTableName) {
@@ -120,13 +184,14 @@ class ClockDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public ClockDatabaseHelper(Context context) {
-        super(context, DATABASE_NAME, null, VERSION_11);
+        super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
         createAlarmsTable(db, ALARMS_TABLE_NAME);
         createInstanceTable(db, INSTANCES_TABLE_NAME);
+        createHolidayTable(db);
 
         // insert default alarms
         LogUtils.i("Inserting default alarms");
@@ -269,6 +334,20 @@ class ClockDatabaseHelper extends SQLiteOpenHelper {
                     + " RENAME TO " + ALARMS_TABLE_NAME + ";");
             db.execSQL("ALTER TABLE " + TEMP_INSTANCES_TABLE_NAME
                     + " RENAME TO " + INSTANCES_TABLE_NAME + ";");
+        }
+
+        if (oldVersion < VERSION_12) {
+            addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.WORKDAY_TYPE,
+                    "INTEGER NOT NULL DEFAULT 0");
+            addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_CYCLE_DAYS,
+                    "INTEGER NOT NULL DEFAULT 7");
+            addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_START_DATE,
+                    "TEXT NOT NULL DEFAULT ''");
+            addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_SKIP_HOLIDAY,
+                    "INTEGER NOT NULL DEFAULT 0");
+            addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_DAYS_MASK,
+                    "TEXT NOT NULL DEFAULT ''");
+            createHolidayTable(db);
         }
     }
 

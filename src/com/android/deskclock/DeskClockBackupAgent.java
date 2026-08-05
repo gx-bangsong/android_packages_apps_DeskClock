@@ -127,10 +127,15 @@ public class DeskClockBackupAgent extends BackupAgent {
 
             if (alarm.enabled) {
                 // Create the next alarm instance to schedule.
-                AlarmInstance alarmInstance = alarm.createInstanceAfter(now);
+                final AlarmInstance alarmInstance = alarm.createInstanceAfter(now);
+                if (alarmInstance == null) {
+                    // No valid next firing time exists (e.g. every shift day is disabled).
+                    LOGGER.i("No valid next alarm time for restored alarm %d", alarm.id);
+                    continue;
+                }
 
                 // Add the next alarm instance to the database.
-                alarmInstance = AlarmInstance.addInstance(contentResolver, alarmInstance);
+                AlarmInstance.addInstance(contentResolver, alarmInstance);
 
                 // Schedule the next alarm instance in AlarmManager.
                 AlarmStateManager.registerInstance(context, alarmInstance, true);

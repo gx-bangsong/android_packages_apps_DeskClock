@@ -66,6 +66,22 @@
         tools:text="12h34m56s"
         tools:ignore="MissingConstraints" />
 
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/quick_timer_carousel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp"
+        android:clipToPadding="false"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+        app:layout_constraintBottom_toTopOf="@id/timer_setup_digits"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/timer_setup_time" />
+
     <include
         android:id="@+id/timer_setup_digits"
         style="@style/TimerSetupDigits"
@@ -75,6 +91,7 @@
         app:layout_constraintDimensionRatio="3:4"
         app:layout_constraintHeight_max="420.0dip"
         app:layout_constraintWidth_max="315.0dip"
+        app:layout_constraintTop_toBottomOf="@id/quick_timer_carousel"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:layout_marginBottom="16dp"/>

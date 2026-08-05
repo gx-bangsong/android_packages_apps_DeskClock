@@ -25,6 +25,8 @@ import android.preference.PreferenceManager;
 import com.android.deskclock.controller.Controller;
 import com.android.deskclock.data.DataModel;
 import com.android.deskclock.events.LogEventTracker;
+import com.android.deskclock.holiday.HolidayRepository;
+import com.android.deskclock.timer.quick.QuickTimerRepository;
 import com.android.deskclock.uidata.UiDataModel;
 import com.google.android.material.color.DynamicColors;
 
@@ -42,6 +44,11 @@ public class DeskClockApplication extends Application {
         Controller.getController().setContext(applicationContext);
         Controller.getController().addEventTracker(new LogEventTracker(applicationContext));
         DynamicColors.applyToActivitiesIfAvailable(this);
+
+        // Holiday data and quick timer presets are needed by the scheduling logic and the timer
+        // creation screen.
+        HolidayRepository.init(applicationContext);
+        QuickTimerRepository.init(applicationContext);
     }
 
     /**

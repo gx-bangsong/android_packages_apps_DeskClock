@@ -125,6 +125,28 @@
         app:layout_constraintTop_toBottomOf="@id/ellipse_layout" />
 
     <TextView
+        android:id="@+id/workday_type_row"
+        android:layout_width="0.0dip"
+        android:layout_height="@dimen/touch_target_min_size"
+        android:background="?selectableItemBackground"
+        android:drawablePadding="@dimen/alarm_horizontal_padding"
+        android:ellipsize="marquee"
+        android:focusable="true"
+        android:gravity="start|center"
+        android:marqueeRepeatLimit="marquee_forever"
+        android:paddingStart="@dimen/icon_margin"
+        android:paddingEnd="@dimen/icon_margin"
+        android:scrollHorizontally="true"
+        android:singleLine="true"
+        android:textAlignment="viewStart"
+        android:textAppearance="@style/body"
+        app:drawableStartCompat="@drawable/ic_workday"
+        app:layout_constraintEnd_toStartOf="@id/end_guide_thin"
+        app:layout_constraintStart_toEndOf="@id/start_guide_thin"
+        app:layout_constraintTop_toBottomOf="@id/repeat_days"
+        tools:text="Workday type" />
+
+    <TextView
         android:id="@+id/choose_ringtone"
         android:layout_width="0.0dip"
         android:layout_height="@dimen/touch_target_min_size"
@@ -143,7 +165,7 @@
         app:drawableStartCompat="@drawable/ic_ringtone"
         app:layout_constraintEnd_toStartOf="@id/end_guide_thin"
         app:layout_constraintStart_toEndOf="@id/start_guide_thin"
-        app:layout_constraintTop_toBottomOf="@id/repeat_days"
+        app:layout_constraintTop_toBottomOf="@id/workday_type_row"
         tools:text="Standard (Hassium)" />
 
     <CheckBox

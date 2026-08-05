@@ -55,6 +55,10 @@ import com.android.deskclock.data.DataModel;
 import com.android.deskclock.data.Timer;
 import com.android.deskclock.data.TimerListener;
 import com.android.deskclock.events.Events;
+import com.android.deskclock.timer.quick.QuickTimer;
+import com.android.deskclock.timer.quick.QuickTimerAdapter;
+import com.android.deskclock.timer.quick.QuickTimerRepository;
+import com.android.deskclock.timer.quick.QuickTimerSetupDialogFragment;
 import com.android.deskclock.uidata.UiDataModel;
 
 import java.io.Serializable;
@@ -81,6 +85,7 @@ public final class TimerFragment extends DeskClockFragment {
     private RecyclerView mRecyclerView;
     private TimerClickHandler mTimerClickHandler;
     private TimerBindHandler mTimerBindHandler;
+    private QuickTimerAdapter mQuickTimerAdapter;
 
     private Serializable mTimerSetupState;
 
@@ -114,6 +119,8 @@ public final class TimerFragment extends DeskClockFragment {
         mTimersView = view.findViewById(R.id.timer_view);
         mCreateTimerView = view.findViewById(R.id.timer_setup);
         mCreateTimerView.setFabContainer(this);
+
+        bindQuickTimers(view);
 
         DataModel.getDataModel().addTimerListener(mAdapter);
         DataModel.getDataModel().addTimerListener(mTimerWatcher);
@@ -177,6 +184,62 @@ public final class TimerFragment extends DeskClockFragment {
 
         DataModel.getDataModel().removeTimerListener(mAdapter);
         DataModel.getDataModel().removeTimerListener(mTimerWatcher);
+        QuickTimerRepository.getInstance().removeListener(mQuickTimerAdapter);
+    }
+
+    /** Binds the horizontal carousel of quick timer presets to the timer creation view. */
+    private void bindQuickTimers(View view) {
+        final RecyclerView carousel = mCreateTimerView.findViewById(R.id.quick_timer_carousel);
+        if (carousel == null) {
+            return;
+        }
+        mQuickTimerAdapter = new QuickTimerAdapter(view.getContext(),
+                new QuickTimerAdapter.OnQuickTimerClickListener() {
+                    @Override
+                    public void onQuickTimerClick(QuickTimer quickTimer) {
+                        startQuickTimer(quickTimer.duration, quickTimer.label);
+                    }
+
+                    @Override
+                    public void onAddQuickTimerClick() {
+                        showQuickTimerSetupDialog();
+                    }
+
+                    @Override
+                    public void onQuickTimerLongClick(QuickTimer quickTimer) {
+                        QuickTimerRepository.getInstance().deleteQuickTimer(quickTimer);
+                    }
+                });
+        carousel.setAdapter(mQuickTimerAdapter);
+        QuickTimerRepository.getInstance().addListener(mQuickTimerAdapter);
+        mQuickTimerAdapter.setQuickTimers(
+                QuickTimerRepository.getInstance().getQuickTimers());
+    }
+
+    /** Starts a timer with the given preset duration and label. */
+    private void startQuickTimer(long duration, String label) {
+        if (duration <= 0) {
+            return;
+        }
+        mCreatingTimer = true;
+        try {
+            final Timer timer = DataModel.getDataModel().addTimer(duration, label, false);
+            Events.sendTimerEvent(R.string.action_create, R.string.label_deskclock);
+
+            DataModel.getDataModel().startTimer(timer);
+            Events.sendTimerEvent(R.string.action_start, R.string.label_deskclock);
+        } finally {
+            mCreatingTimer = false;
+        }
+        animateToView(mTimersView, null, true);
+    }
+
+    /** Shows the dialog used to create a new quick timer preset. */
+    private void showQuickTimerSetupDialog() {
+        final QuickTimerSetupDialogFragment dialog = new QuickTimerSetupDialogFragment();
+        dialog.setListener((duration, label) ->
+                QuickTimerRepository.getInstance().addQuickTimer(duration, label));
+        dialog.show(getParentFragmentManager(), "QuickTimerSetup");
     }
 
     @Override
