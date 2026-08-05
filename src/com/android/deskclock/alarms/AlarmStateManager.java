@@ -228,6 +228,13 @@ public final class AlarmStateManager extends BroadcastReceiver {
             return;
         }
 
+        if (!alarm.enabled) {
+            // A disabled alarm must never schedule a new instance. This happens when the user
+            // chooses to turn off a repeating alarm from the dismiss options sheet.
+            LogUtils.i("Alarm " + alarm.id + " is disabled; not scheduling a new instance");
+            return;
+        }
+
         if (!alarm.daysOfWeek.isRepeating()) {
             if (alarm.deleteAfterUse) {
                 LogUtils.i("Deleting parent alarm: " + alarm.id);
