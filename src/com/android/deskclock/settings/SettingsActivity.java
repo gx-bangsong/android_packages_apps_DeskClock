@@ -227,6 +227,10 @@ public final class SettingsActivity extends ToolbarBaseActivity {
          * previous dataset is kept.
          */
         private void updateHolidayData(final Preference pref) {
+            final Context context = getContext();
+            if (context == null) {
+                return;
+            }
             final Context appContext = context.getApplicationContext();
             HolidayRepository.init(appContext);
             final HolidayRepository repository = HolidayRepository.getInstanceOrNull();
