@@ -175,9 +175,10 @@ public final class ClockContract {
 
     /**
      * Constants for the Holiday table, which stores the legal holidays and make-up workdays
-     * downloaded from a user-configurable data source.
+     * downloaded from a user-configurable data source. Public because the holiday data is
+     * accessed from {@code com.android.deskclock.holiday}.
      */
-    protected interface HolidayColumns extends BaseColumns {
+    public interface HolidayColumns extends BaseColumns {
         /**
          * The display name of the holiday.
          * <p>Type: TEXT</p>

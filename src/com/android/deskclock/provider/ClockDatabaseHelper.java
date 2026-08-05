@@ -92,7 +92,8 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
     static final String OLD_ALARMS_TABLE_NAME = "alarms";
     static final String ALARMS_TABLE_NAME = "alarm_templates";
     static final String INSTANCES_TABLE_NAME = "alarm_instances";
-    static final String HOLIDAY_TABLE_NAME = "holiday";
+    /** Public because the holiday table is accessed from {@code com.android.deskclock.holiday}. */
+    public static final String HOLIDAY_TABLE_NAME = "holiday";
     private static final String SELECTED_CITIES_TABLE_NAME = "selected_cities";
 
     /** Shared helper instance used by components outside the provider package. */
