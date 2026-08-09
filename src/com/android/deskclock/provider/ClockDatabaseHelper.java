@@ -198,6 +198,23 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
     }
 
     @Override
+    public void onOpen(SQLiteDatabase db) {
+        super.onOpen(db);
+        // 每次打开数据库都确保 workday/shift 列存在（解决中间构建导致的 version=13 但缺列问题）
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.WORKDAY_TYPE,
+                "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_CYCLE_DAYS,
+                "INTEGER NOT NULL DEFAULT 7");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_START_DATE,
+                "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_SKIP_HOLIDAY,
+                "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_DAYS_MASK,
+                "TEXT NOT NULL DEFAULT ''");
+        createHolidayTable(db);
+    }
+
+    @Override
     public void onCreate(SQLiteDatabase db) {
         createAlarmsTable(db, ALARMS_TABLE_NAME);
         createInstanceTable(db, INSTANCES_TABLE_NAME);
