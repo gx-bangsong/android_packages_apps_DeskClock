@@ -65,6 +65,7 @@ public final class DataModel {
     public enum AlarmVolumeButtonBehavior {NOTHING, SNOOZE, DISMISS}
 
     /** Indicates the reason alarms may not fire or may fire silently. */
+    @SuppressWarnings("unchecked")
     public enum SilentSetting {
         DO_NOT_DISTURB(R.string.alarms_blocked_by_dnd, 0, Predicate.FALSE, null),
         MUTED_VOLUME(R.string.alarm_volume_muted,
