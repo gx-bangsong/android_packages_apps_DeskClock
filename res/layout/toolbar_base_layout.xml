@@ -18,7 +18,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/content_parent"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/app_bar"
@@ -27,7 +28,9 @@
         android:background="?colorPrimary"
         android:outlineAmbientShadowColor="@android:color/transparent"
         android:outlineSpotShadowColor="@android:color/transparent"
-        android:theme="@style/Theme.Toolbar.Settings">
+        android:theme="@style/Theme.Toolbar.Settings"
+        app:liftOnScroll="false"
+        app:elevation="0dp">
 
         <Toolbar
             android:id="@+id/action_bar"

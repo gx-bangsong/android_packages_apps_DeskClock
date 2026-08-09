@@ -49,13 +49,14 @@ public abstract class BaseActivity extends AppCompatActivity {
 
         final View root = findViewById(android.R.id.content);
         final View appBar = findViewById(R.id.app_bar);
-        final View bottomNavigation = findViewById(R.id.bottom_view);
-        if (bottomNavigation != null) {
+        final View bottomBarContainer = findViewById(R.id.bottom_bar_container);
+        if (bottomBarContainer != null) {
             // Keep the navigation bar background immersive, but move the navigation items above
-            // the gesture area. The app bar gets the same treatment at the top of the screen.
+            // the gesture area. The inset belongs to the background-bearing container, not the
+            // navigation view itself, so the gesture area is painted with the same surface color.
             EdgeToEdgeUtils.applyHorizontalInsets(root);
             EdgeToEdgeUtils.applyTopInsets(appBar);
-            EdgeToEdgeUtils.applyBottomInsets(bottomNavigation);
+            EdgeToEdgeUtils.applyBottomInsets(bottomBarContainer);
         } else if (appBar != null) {
             EdgeToEdgeUtils.applyHorizontalInsets(root);
             EdgeToEdgeUtils.applyTopInsets(appBar);
