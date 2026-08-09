@@ -149,8 +149,13 @@ public class ClockProvider extends ContentProvider {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
-        // Generate the body of the query
+        // 每次查询前都确保 workday 列存在（最终兜底方案）
         int match = sURIMatcher.match(uri);
+        if (match == ALARMS || match == ALARMS_ID || match == ALARMS_WITH_INSTANCES) {
+            ClockDatabaseHelper.getInstance(getContext());
+        }
+
+        // Generate the body of the query
         switch (match) {
             case ALARMS:
                 qb.setTables(ALARMS_TABLE_NAME);
