@@ -19,11 +19,19 @@ package com.android.deskclock.workdays;
 import android.content.Context;
 
 import com.android.deskclock.R;
+import com.android.deskclock.provider.Alarm;
+
+import java.time.LocalDate;
+import java.util.Locale;
 
 /**
  * Small helpers for displaying workday types in the alarm list.
  */
 public final class WorkdayTypeUtils {
+
+    private static final String[] CHINESE_DIGITS = {
+            "零", "一", "二", "三", "四", "五", "六", "七", "八", "九"
+    };
 
     private WorkdayTypeUtils() {}
 
@@ -47,5 +55,55 @@ public final class WorkdayTypeUtils {
             default:
                 return context.getString(R.string.workday_type_none);
         }
+    }
+
+    /**
+     * Returns the current cycle position for a shift alarm, for example "轮班制第一天，共三天".
+     * The position is based on today's date rather than the next firing date so it remains useful
+     * even when today's cycle day is disabled.
+     */
+    public static String getShiftDescription(Context context, Alarm alarm) {
+        final ShiftSchedule schedule = alarm.createShiftSchedule();
+        final int day = schedule.dayIndexFor(LocalDate.now()) + 1;
+        final int total = schedule.getCycleDays();
+        if (isChinese(context)) {
+            return context.getString(R.string.workday_type_shift_day,
+                    toChineseNumber(day), toChineseNumber(total));
+        }
+        return context.getString(R.string.workday_type_shift_day,
+                String.valueOf(day), String.valueOf(total));
+    }
+
+    private static boolean isChinese(Context context) {
+        final String language = context.getResources().getConfiguration().getLocales()
+                .get(0).getLanguage();
+        return Locale.CHINESE.getLanguage().equals(language);
+    }
+
+    /** Formats the range used by shift cycles in natural Chinese numerals. */
+    private static String toChineseNumber(int value) {
+        if (value <= 0) {
+            return CHINESE_DIGITS[0];
+        }
+        if (value < 10) {
+            return CHINESE_DIGITS[value];
+        }
+        if (value < 20) {
+            return "十" + (value == 10 ? "" : CHINESE_DIGITS[value - 10]);
+        }
+        if (value < 100) {
+            final int tens = value / 10;
+            final int ones = value % 10;
+            return CHINESE_DIGITS[tens] + "十" + (ones == 0 ? "" : CHINESE_DIGITS[ones]);
+        }
+        final int hundreds = value / 100;
+        final int remainder = value % 100;
+        if (remainder == 0) {
+            return CHINESE_DIGITS[hundreds] + "百";
+        }
+        if (remainder < 10) {
+            return CHINESE_DIGITS[hundreds] + "百零" + CHINESE_DIGITS[remainder];
+        }
+        return CHINESE_DIGITS[hundreds] + "百" + toChineseNumber(remainder);
     }
 }

@@ -42,11 +42,26 @@ public final class EdgeToEdgeUtils {
     }
 
     /**
-     * Adds the current system-bar insets to a root view's existing padding. The listener retains
-     * the original padding so configuration changes and repeated inset dispatches do not stack
-     * padding indefinitely.
+     * Adds all system-bar insets to a view's existing padding. This is useful for a standalone
+     * screen that has no background-bearing app bar or bottom navigation view.
      */
     public static void applyInsets(View root) {
+        applyInsets(root, true, true, true);
+    }
+
+    /**
+     * Applies selected insets while leaving the other edges untouched. Background-bearing bars
+     * should use this method so their background can extend behind the system bars while their
+     * controls remain readable. The listener retains the original padding so configuration
+     * changes and repeated inset dispatches do not stack padding indefinitely.
+     *
+     * @param root the view receiving the insets
+     * @param applyTop whether to apply the top inset
+     * @param applyBottom whether to apply the bottom/IME inset
+     * @param applyHorizontal whether to apply left and right cutout insets
+     */
+    public static void applyInsets(View root, boolean applyTop, boolean applyBottom,
+            boolean applyHorizontal) {
         if (root == null) {
             return;
         }
@@ -58,10 +73,25 @@ public final class EdgeToEdgeUtils {
             final Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()
                     | WindowInsetsCompat.Type.displayCutout()
                     | WindowInsetsCompat.Type.ime());
-            view.setPadding(initialLeft + bars.left, initialTop + bars.top,
-                    initialRight + bars.right, initialBottom + bars.bottom);
+            view.setPadding(
+                    initialLeft + (applyHorizontal ? bars.left : 0),
+                    initialTop + (applyTop ? bars.top : 0),
+                    initialRight + (applyHorizontal ? bars.right : 0),
+                    initialBottom + (applyBottom ? bars.bottom : 0));
             return insets;
         });
         ViewCompat.requestApplyInsets(root);
+    }
+
+    public static void applyTopInsets(View root) {
+        applyInsets(root, true, false, false);
+    }
+
+    public static void applyBottomInsets(View root) {
+        applyInsets(root, false, true, false);
+    }
+
+    public static void applyHorizontalInsets(View root) {
+        applyInsets(root, false, false, true);
     }
 }

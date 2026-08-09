@@ -95,7 +95,7 @@ public final class WorkdayTypeActivity extends FragmentActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdgeUtils.configureWindow(getWindow());
         setContentView(R.layout.activity_workday_type);
-        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content));
+        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content), true, false, true);
 
         mAlarmId = getIntent().getLongExtra(EXTRA_ALARM_ID, Alarm.INVALID_ID);
 

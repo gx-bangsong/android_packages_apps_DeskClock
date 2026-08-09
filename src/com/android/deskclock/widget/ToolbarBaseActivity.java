@@ -42,7 +42,9 @@ public class ToolbarBaseActivity extends FragmentActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdgeUtils.configureWindow(getWindow());
         super.setContentView(R.layout.toolbar_base_layout);
-        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content));
+        EdgeToEdgeUtils.applyHorizontalInsets(findViewById(R.id.content_parent));
+        EdgeToEdgeUtils.applyTopInsets(findViewById(R.id.app_bar));
+        EdgeToEdgeUtils.applyBottomInsets(findViewById(R.id.content_frame));
 
         final Toolbar toolbar = findViewById(R.id.action_bar);
         setActionBar(toolbar);

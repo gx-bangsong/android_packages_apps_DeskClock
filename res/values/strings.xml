@@ -1072,6 +1072,7 @@
     <string name="workday_type_big_small_weekend">Alternating weeks (rest Saturday and Sunday this week)</string>
     <string name="workday_type_big_small_weekend_summary">This week rests Saturday and Sunday, then weeks alternate</string>
     <string name="workday_type_shift">Shift rotation</string>
+    <string name="workday_type_shift_day">Shift rotation day %1$s of %2$s</string>
     <string name="workday_type_shift_summary">Configure a repeating shift cycle schedule</string>
 
     <!-- Shift rotation editor -->

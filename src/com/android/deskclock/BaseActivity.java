@@ -18,6 +18,7 @@ package com.android.deskclock;
 
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.view.View;
 
 import androidx.annotation.ColorInt;
 import androidx.appcompat.app.AppCompatActivity;
@@ -45,7 +46,46 @@ public abstract class BaseActivity extends AppCompatActivity {
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
         super.onPostCreate(savedInstanceState);
-        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content));
+
+        final View root = findViewById(android.R.id.content);
+        final View appBar = findViewById(R.id.app_bar);
+        final View bottomNavigation = findViewById(R.id.bottom_view);
+        if (bottomNavigation != null) {
+            // Keep the navigation bar background immersive, but move the navigation items above
+            // the gesture area. The app bar gets the same treatment at the top of the screen.
+            EdgeToEdgeUtils.applyHorizontalInsets(root);
+            EdgeToEdgeUtils.applyTopInsets(appBar);
+            EdgeToEdgeUtils.applyBottomInsets(bottomNavigation);
+        } else if (appBar != null) {
+            EdgeToEdgeUtils.applyHorizontalInsets(root);
+            EdgeToEdgeUtils.applyTopInsets(appBar);
+            applyBottomInsetToFirst(root, R.id.cities_list, R.id.expired_timers_scroll);
+        } else if (hasView(R.id.cities_list, R.id.expired_timers_scroll)) {
+            EdgeToEdgeUtils.applyInsets(root, true, false, true);
+            applyBottomInsetToFirst(root, R.id.cities_list, R.id.expired_timers_scroll);
+        } else {
+            EdgeToEdgeUtils.applyInsets(root);
+        }
+    }
+
+    private boolean hasView(int... ids) {
+        for (int id : ids) {
+            if (findViewById(id) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void applyBottomInsetToFirst(View root, int... ids) {
+        for (int id : ids) {
+            final View view = findViewById(id);
+            if (view != null) {
+                EdgeToEdgeUtils.applyBottomInsets(view);
+                return;
+            }
+        }
+        EdgeToEdgeUtils.applyBottomInsets(root);
     }
 
     @Override

@@ -130,7 +130,9 @@ public abstract class AlarmItemViewHolder extends ItemAdapter.ItemViewHolder<Ala
         if (alarm.workdayType != WorkdayType.NONE) {
             // Alarms with a workday type show the type label instead of the weekly repeat
             // summary, since the workday logic governs when the alarm rings.
-            final String label = WorkdayTypeUtils.getLabel(context, alarm.workdayType);
+            final String label = alarm.workdayType == WorkdayType.SHIFT
+                    ? WorkdayTypeUtils.getShiftDescription(context, alarm)
+                    : WorkdayTypeUtils.getLabel(context, alarm.workdayType);
             daysOfWeek.setText(label);
             daysOfWeek.setContentDescription(label);
             return;

@@ -87,7 +87,8 @@ public final class ShiftScheduleActivity extends FragmentActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdgeUtils.configureWindow(getWindow());
         setContentView(R.layout.activity_shift_schedule);
-        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content));
+        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content), true, false, true);
+        EdgeToEdgeUtils.applyBottomInsets(findViewById(R.id.shift_schedule_scroll));
 
         mAlarmId = getIntent().getLongExtra(EXTRA_ALARM_ID, Alarm.INVALID_ID);
         mAlarm = mAlarmId == Alarm.INVALID_ID ? null : Alarm.getAlarm(getContentResolver(), mAlarmId);

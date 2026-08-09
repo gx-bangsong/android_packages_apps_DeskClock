@@ -432,6 +432,7 @@
     <string name="workday_type_big_small_weekend">大小周制（本周休周六、日）</string>
     <string name="workday_type_big_small_weekend_summary">当前周休周六、日，后续按照大小周规则切换</string>
     <string name="workday_type_shift">轮班制</string>
+    <string name="workday_type_shift_day">轮班制第%1$s天，共%2$s天</string>
     <string name="workday_type_shift_summary">进入轮班制编辑页面，配置轮班周期和每日开关</string>
 
     <!-- 轮班制编辑 -->
