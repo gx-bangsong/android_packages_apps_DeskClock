@@ -422,6 +422,7 @@
 
     <!-- 工作日类型 -->
     <string name="workday_type_title">工作日类型</string>
+    <string name="workday_type_back">返回</string>
     <string name="workday_type_summary">将智能跳过法定节假日并补充调休上班日闹钟</string>
     <string name="workday_type_none">关闭</string>
     <string name="workday_type_statutory">法定工作日</string>

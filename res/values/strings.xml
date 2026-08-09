@@ -1062,6 +1062,7 @@
 
     <!-- Workday types -->
     <string name="workday_type_title">Workday type</string>
+    <string name="workday_type_back">Back</string>
     <string name="workday_type_summary">Intelligently skip legal holidays and ring on make-up workdays</string>
     <string name="workday_type_none">Off</string>
     <string name="workday_type_statutory">Statutory workdays</string>

@@ -122,6 +122,7 @@
     <dimen name="alarm_clock_expanded_vertical_margin">8dp</dimen>
 
     <dimen name="settings_padding">4dp</dimen>
+    <dimen name="workday_type_content_max_width">640dp</dimen>
 
     <dimen name="analog_clock_width_percent">0.5</dimen>
 
