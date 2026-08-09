@@ -91,7 +91,8 @@ public final class ShiftScheduleActivity extends FragmentActivity {
                 ThemeUtils.resolveColor(this, R.attr.colorSurface),
                 ThemeUtils.resolveColor(this, R.attr.colorSurface));
         setContentView(R.layout.activity_shift_schedule);
-        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content), true, false, true);
+        EdgeToEdgeUtils.applyHorizontalInsets(findViewById(android.R.id.content));
+        EdgeToEdgeUtils.applyTopInsets(findViewById(R.id.shift_toolbar));
         EdgeToEdgeUtils.applyBottomInsets(findViewById(R.id.shift_schedule_scroll));
 
         mAlarmId = getIntent().getLongExtra(EXTRA_ALARM_ID, Alarm.INVALID_ID);

@@ -17,209 +17,238 @@
 
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
     android:orientation="vertical">
 
-    <!-- Top bar: cancel | title | done -->
-    <LinearLayout
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/shift_toolbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:minHeight="@dimen/touch_target_min_size"
-        android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp">
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        app:elevation="0dp">
 
         <TextView
             android:id="@+id/shift_cancel"
-            style="@style/body"
+            style="@style/WorkdayTypeToolbarAction"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="?android:attr/selectableItemBackground"
-            android:padding="12dp"
-            android:text="@string/cancel"
-            android:textColor="?attr/colorPrimary" />
+            android:layout_height="match_parent"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:layout_gravity="start"
+            android:minWidth="64dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="@string/cancel" />
 
         <TextView
             android:id="@+id/shift_title"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
+            style="@style/WorkdayTypeToolbarTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
             android:gravity="center"
-            android:text="@string/shift_rotation"
-            android:textAppearance="?android:attr/textAppearanceMedium" />
+            android:text="@string/shift_rotation" />
 
         <TextView
             android:id="@+id/shift_done"
-            style="@style/body"
+            style="@style/WorkdayTypeToolbarAction"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="?android:attr/selectableItemBackground"
-            android:padding="12dp"
-            android:text="@string/done"
-            android:textColor="?attr/colorPrimary" />
-    </LinearLayout>
+            android:layout_height="match_parent"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:layout_gravity="end"
+            android:minWidth="64dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="@string/done" />
+    </com.google.android.material.appbar.MaterialToolbar>
 
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:id="@+id/shift_schedule_scroll"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:clipToPadding="false"
         android:fillViewport="true">
 
-        <LinearLayout
+        <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingStart="@dimen/settings_padding"
-            android:paddingEnd="@dimen/settings_padding">
+            android:paddingBottom="24dp">
 
-            <!-- Shift cycle -->
-            <LinearLayout
-                android:id="@+id/shift_cycle_row"
-                android:layout_width="match_parent"
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/shift_settings_card"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:background="?android:attr/selectableItemBackground"
-                android:gravity="center_vertical"
-                android:minHeight="@dimen/touch_target_min_size"
-                android:orientation="horizontal"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/shift_cycle_title"
-                    android:textAppearance="?android:attr/textAppearanceMedium" />
-
-                <TextView
-                    android:id="@+id/shift_cycle_value"
-                    style="@style/body"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="?android:attr/textColorSecondary" />
-            </LinearLayout>
-
-            <!-- Shift start date -->
-            <LinearLayout
-                android:id="@+id/shift_start_date_row"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="?android:attr/selectableItemBackground"
-                android:gravity="center_vertical"
-                android:minHeight="@dimen/touch_target_min_size"
-                android:orientation="horizontal"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/shift_start_date_title"
-                    android:textAppearance="?android:attr/textAppearanceMedium" />
-
-                <TextView
-                    android:id="@+id/shift_start_date_value"
-                    style="@style/body"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="?android:attr/textColorSecondary" />
-            </LinearLayout>
-
-            <!-- Skip legal holidays -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:minHeight="@dimen/touch_target_min_size"
-                android:orientation="horizontal"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp">
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginEnd="16dp"
+                app:cardBackgroundColor="?attr/colorSurfaceVariant"
+                app:cardCornerRadius="28dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutline"
+                app:strokeWidth="1dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintWidth_max="@dimen/workday_type_content_max_width">
 
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:divider="@drawable/workday_type_divider"
+                    android:orientation="vertical"
+                    android:showDividers="middle">
+
+                    <LinearLayout
+                        android:id="@+id/shift_cycle_row"
+                        style="@style/WorkdayTypeSettingRow"
+                        android:background="?attr/selectableItemBackground">
+
+                        <TextView
+                            style="@style/WorkdayTypeOptionTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/shift_cycle_title" />
+
+                        <TextView
+                            android:id="@+id/shift_cycle_value"
+                            style="@style/WorkdayTypeOptionSummary"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/shift_start_date_row"
+                        style="@style/WorkdayTypeSettingRow"
+                        android:background="?attr/selectableItemBackground">
+
+                        <TextView
+                            style="@style/WorkdayTypeOptionTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/shift_start_date_title" />
+
+                        <TextView
+                            android:id="@+id/shift_start_date_value"
+                            style="@style/WorkdayTypeOptionSummary"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        style="@style/WorkdayTypeSettingRow"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:paddingEnd="12dp">
+
+                            <TextView
+                                style="@style/WorkdayTypeOptionTitle"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/shift_skip_holiday_title" />
+
+                            <TextView
+                                style="@style/WorkdayTypeOptionSummary"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:text="@string/shift_skip_holiday_summary" />
+                        </LinearLayout>
+
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/shift_skip_holiday_switch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        style="@style/WorkdayTypeSettingRow">
+
+                        <TextView
+                            style="@style/WorkdayTypeOptionTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/shift_current_period_title" />
+
+                        <TextView
+                            android:id="@+id/shift_current_period_value"
+                            style="@style/WorkdayTypeOptionSummary"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/shift_days_card"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginEnd="16dp"
+                app:cardBackgroundColor="?attr/colorSurfaceVariant"
+                app:cardCornerRadius="28dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutline"
+                app:strokeWidth="1dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/shift_settings_card"
+                app:layout_constraintWidth_max="@dimen/workday_type_content_max_width">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:orientation="vertical">
 
                     <TextView
+                        style="@style/WorkdayTypeSectionTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/shift_skip_holiday_title"
-                        android:textAppearance="?android:attr/textAppearanceMedium" />
+                        android:paddingStart="16dp"
+                        android:paddingTop="20dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="12dp"
+                        android:text="@string/shift_days_section_title" />
 
                     <TextView
-                        style="@style/body"
+                        android:id="@+id/shift_all_off_warning"
+                        style="@style/WorkdayTypeOptionSummary"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/shift_skip_holiday_summary"
-                        android:textColor="?android:attr/textColorSecondary" />
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="8dp"
+                        android:text="@string/shift_all_days_off_warning"
+                        android:textColor="?attr/colorError"
+                        android:visibility="gone"
+                        tools:text="@string/shift_all_days_off_warning"
+                        tools:visibility="visible" />
+
+                    <LinearLayout
+                        android:id="@+id/shift_days_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:divider="@drawable/workday_type_divider"
+                        android:orientation="vertical"
+                        android:showDividers="middle" />
                 </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/shift_skip_holiday_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <!-- Current period -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:minHeight="@dimen/touch_target_min_size"
-                android:orientation="horizontal"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/shift_current_period_title"
-                    android:textAppearance="?android:attr/textAppearanceMedium" />
-
-                <TextView
-                    android:id="@+id/shift_current_period_value"
-                    style="@style/body"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="?android:attr/textColorSecondary" />
-            </LinearLayout>
-
-            <TextView
-                style="@style/body"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
-                android:text="@string/shift_days_section_title"
-                android:textColor="?android:attr/textColorSecondary" />
-
-            <TextView
-                android:id="@+id/shift_all_off_warning"
-                style="@style/body"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingTop="4dp"
-                android:paddingBottom="8dp"
-                android:text="@string/shift_all_days_off_warning"
-                android:textColor="?attr/colorError"
-                android:visibility="gone"
-                tools:text="@string/shift_all_days_off_warning"
-                tools:visibility="visible" />
-
-            <LinearLayout
-                android:id="@+id/shift_days_container"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-
-        </LinearLayout>
-    </ScrollView>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>
