@@ -195,6 +195,19 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
 
     public ClockDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        // 构造函数中立即确保列存在（最可靠，解决 onOpen 可能晚于第一次查询的问题）
+        SQLiteDatabase db = getWritableDatabase();
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.WORKDAY_TYPE,
+                "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_CYCLE_DAYS,
+                "INTEGER NOT NULL DEFAULT 7");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_START_DATE,
+                "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_SKIP_HOLIDAY,
+                "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_DAYS_MASK,
+                "TEXT NOT NULL DEFAULT ''");
+        createHolidayTable(db);
     }
 
     @Override
