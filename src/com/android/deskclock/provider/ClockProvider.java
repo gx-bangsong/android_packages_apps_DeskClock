@@ -136,6 +136,10 @@ public class ClockProvider extends ContentProvider {
         }
 
         mOpenHelper = new ClockDatabaseHelper(storageContext);
+
+        // 强制在 ContentProvider 创建时立即确保 workday 列存在（最可靠方案，优先于任何查询）
+        ClockDatabaseHelper.getInstance(context);
+
         return true;
     }
 
