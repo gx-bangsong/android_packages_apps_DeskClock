@@ -78,8 +78,17 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
      */
     private static final int VERSION_12 = 13;
 
+    /**
+     * Re-assert the workday/shift-rotation columns and the holiday table. Some devices ended up
+     * with a database already stamped with version 13 but lacking the new columns (created by an
+     * intermediate build), which crashed the alarm list query with
+     * "Invalid column alarm_templates.workday_type". The migration below is idempotent, so
+     * bumping the version heals those databases on the next launch.
+     */
+    private static final int VERSION_13 = 14;
+
     /** The current database version. */
-    private static final int DATABASE_VERSION = VERSION_12;
+    private static final int DATABASE_VERSION = VERSION_13;
 
     // This creates a default alarm at 8:30 for every Mon,Tue,Wed,Thu,Fri
     private static final String DEFAULT_ALARM_1 = "(8, 30, 31, 0, 1, '', NULL, 0, 0);";
@@ -337,7 +346,11 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
                     + " RENAME TO " + INSTANCES_TABLE_NAME + ";");
         }
 
-        if (oldVersion < VERSION_12) {
+        if (oldVersion < VERSION_13) {
+            // Idempotent: adds the workday/shift-rotation columns if they are missing and
+            // creates the holiday table if it does not exist. Runs for every database older
+            // than the current version, including version 13 databases that were created
+            // without the new columns by an intermediate build.
             addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.WORKDAY_TYPE,
                     "INTEGER NOT NULL DEFAULT 0");
             addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_CYCLE_DAYS,
