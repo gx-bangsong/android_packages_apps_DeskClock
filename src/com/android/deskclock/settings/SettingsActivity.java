@@ -249,14 +249,13 @@ public final class SettingsActivity extends ToolbarBaseActivity {
 
         @Override
         public void onDisplayPreferenceDialog(Preference preference) {
-            // Only single-selection lists are currently supported.
-            final PreferenceDialogFragmentCompat f;
             if (preference instanceof ListPreference) {
-                f = ListPreferenceDialogFragmentCompat.newInstance(preference.getKey());
-            } else {
-                throw new IllegalArgumentException("Unsupported DialogPreference type");
+                final PreferenceDialogFragmentCompat f =
+                        ListPreferenceDialogFragmentCompat.newInstance(preference.getKey());
+                showDialog(f);
+                return;
             }
-            showDialog(f);
+            super.onDisplayPreferenceDialog(preference);
         }
 
         private void showDialog(PreferenceDialogFragmentCompat fragment) {
