@@ -58,7 +58,9 @@ public class AlarmSelectionActivity extends ListActivity {
         // then we only show those alarms with that time
 
         super.onCreate(savedInstanceState);
+        EdgeToEdgeUtils.configureWindow(getWindow());
         setContentView(R.layout.selection_layout);
+        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content));
 
         final Button cancelButton = findViewById(R.id.cancel_button);
         cancelButton.setOnClickListener(v -> finish());

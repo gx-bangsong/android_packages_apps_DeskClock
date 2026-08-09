@@ -85,6 +85,8 @@ public class ClockProvider extends ContentProvider {
                 ALARMS_TABLE_NAME + "." + AlarmsColumns.SHIFT_SKIP_HOLIDAY);
         sAlarmsWithInstancesProjection.put(ALARMS_TABLE_NAME + "." + AlarmsColumns.SHIFT_DAYS_MASK,
                 ALARMS_TABLE_NAME + "." + AlarmsColumns.SHIFT_DAYS_MASK);
+        sAlarmsWithInstancesProjection.put(ALARMS_TABLE_NAME + "." + AlarmsColumns.SHIFT_TIMES,
+                ALARMS_TABLE_NAME + "." + AlarmsColumns.SHIFT_TIMES);
         sAlarmsWithInstancesProjection.put(INSTANCES_TABLE_NAME + "."
                 + InstancesColumns.ALARM_STATE,
                 INSTANCES_TABLE_NAME + "." + InstancesColumns.ALARM_STATE);

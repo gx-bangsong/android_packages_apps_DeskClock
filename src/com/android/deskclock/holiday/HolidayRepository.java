@@ -21,6 +21,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
@@ -179,23 +180,60 @@ public final class HolidayRepository implements HolidayProvider {
             boolean success = false;
             String errorMessage = null;
             try {
-                final String json = fetch(getHolidayDataUrl());
-                final List<Holiday> parsed = HolidayDataParser.parse(json);
-                replaceAll(parsed);
-                mHolidays = Collections.unmodifiableList(new ArrayList<>(parsed));
-                LOGGER.i("Holiday data updated: %d entries", parsed.size());
-                WorkdayAlarmScheduler.rescheduleAllWorkdayAlarms(mContext);
+                replaceFromJson(fetch(getHolidayDataUrl()));
                 success = true;
             } catch (Exception e) {
                 LOGGER.e("Failed to update holiday data", e);
                 errorMessage = e.getMessage();
             }
-            final boolean finishedSuccessfully = success;
-            final String message = errorMessage;
-            if (callback != null) {
-                mMainHandler.post(() -> callback.onFinished(finishedSuccessfully, message));
-            }
+            postUpdateResult(callback, success, errorMessage);
         });
+    }
+
+    /**
+     * Imports a JSON document selected by the user with the system file picker. The selected URI
+     * is read on the repository executor, so file-provider and cloud-document reads never block
+     * the settings screen.
+     *
+     * @param uri a readable JSON document URI
+     * @param callback invoked on the main thread when the import finishes
+     */
+    public void importHolidayData(final Uri uri, final UpdateCallback callback) {
+        mExecutor.execute(() -> {
+            boolean success = false;
+            String errorMessage = null;
+            try {
+                if (uri == null) {
+                    throw new IOException("No file was selected");
+                }
+                try (InputStream input = mContext.getContentResolver().openInputStream(uri)) {
+                    if (input == null) {
+                        throw new IOException("Unable to open the selected file");
+                    }
+                    replaceFromJson(readJson(input));
+                }
+                success = true;
+            } catch (Exception e) {
+                LOGGER.e("Failed to import holiday data", e);
+                errorMessage = e.getMessage();
+            }
+            postUpdateResult(callback, success, errorMessage);
+        });
+    }
+
+    /** Parses, stores and activates a complete holiday document. */
+    private void replaceFromJson(String json) throws Exception {
+        final List<Holiday> parsed = HolidayDataParser.parse(json);
+        replaceAll(parsed);
+        mHolidays = Collections.unmodifiableList(new ArrayList<>(parsed));
+        LOGGER.i("Holiday data updated: %d entries", parsed.size());
+        WorkdayAlarmScheduler.rescheduleAllWorkdayAlarms(mContext);
+    }
+
+    private void postUpdateResult(UpdateCallback callback, boolean success, String errorMessage) {
+        if (callback != null) {
+            mMainHandler.post(() -> callback.onFinished(success, errorMessage));
+        }
     }
 
     private String fetch(String urlText) throws IOException {
@@ -210,24 +248,29 @@ public final class HolidayRepository implements HolidayProvider {
             if (responseCode < 200 || responseCode >= 300) {
                 throw new IOException("HTTP error " + responseCode);
             }
-            final StringBuilder builder = new StringBuilder();
-            try (InputStream input = connection.getInputStream();
-                 BufferedReader reader = new BufferedReader(
-                         new InputStreamReader(input, StandardCharsets.UTF_8))) {
-                final char[] buffer = new char[8192];
-                int read;
-                while ((read = reader.read(buffer)) != -1) {
-                    builder.append(buffer, 0, read);
-                    if (builder.length() > MAX_RESPONSE_BYTES) {
-                        throw new IOException("Holiday data exceeds "
-                                + MAX_RESPONSE_BYTES + " bytes");
-                    }
-                }
+            try (InputStream input = connection.getInputStream()) {
+                return readJson(input);
             }
-            return builder.toString();
         } finally {
             connection.disconnect();
         }
+    }
+
+    private String readJson(InputStream input) throws IOException {
+        final StringBuilder builder = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(input, StandardCharsets.UTF_8))) {
+            final char[] buffer = new char[8192];
+            int read;
+            while ((read = reader.read(buffer)) != -1) {
+                builder.append(buffer, 0, read);
+                if (builder.length() > MAX_RESPONSE_BYTES) {
+                    throw new IOException("Holiday data exceeds "
+                            + MAX_RESPONSE_BYTES + " bytes");
+                }
+            }
+        }
+        return builder.toString();
     }
 
     private List<Holiday> loadFromDatabase() {

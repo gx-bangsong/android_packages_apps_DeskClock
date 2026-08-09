@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Copyright (C) 2016 The Android Open Source Project
+  Copyright (C) 2026 The LineageOS Project
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,21 +23,24 @@
     android:layout_height="match_parent"
     android:paddingBottom="@dimen/fab_container_height">
 
-    <!-- Keep the value, carousel and keypad in one vertical chain. Fixed percentage guidelines
-         caused the carousel to be laid out on top of the value on tall displays. -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/quick_timer_split"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.5" />
+
+    <!-- The left half contains the time and the quick-timer carousel. -->
     <com.android.deskclock.widget.AutoSizingTextView
         android:id="@+id/timer_setup_time"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
-        android:layout_marginEnd="16dp"
-        android:ellipsize="none"
+        android:layout_height="0dp"
         android:gravity="center"
-        android:fontFamily="sans-serif"
+        android:includeFontPadding="false"
         android:textColor="?android:attr/textColorPrimary"
         android:textSize="@dimen/timer_setup_digit_font_size"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/quick_timer_carousel"
+        app:layout_constraintEnd_toStartOf="@id/quick_timer_split"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         tools:text="12h34m56s" />
@@ -46,29 +49,30 @@
         android:id="@+id/quick_timer_carousel"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
         android:clipToPadding="false"
         android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/quick_timer_split"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/timer_setup_time" />
 
+    <!-- The keypad stays in the right half and never shares bounds with the carousel. -->
     <include
         android:id="@+id/timer_setup_digits"
         layout="@layout/timer_setup_digits"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="16dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintDimensionRatio="3:4"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHeight_max="420dp"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/quick_timer_carousel"
+        app:layout_constraintStart_toStartOf="@id/quick_timer_split"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintWidth_max="315dp" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

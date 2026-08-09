@@ -22,8 +22,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    app:statusBarBackground="@null"
-    android:fitsSystemWindows="true">
+    app:statusBarBackground="@null">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"

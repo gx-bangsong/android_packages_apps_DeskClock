@@ -85,6 +85,17 @@ public class ShiftSchedulerTest {
     }
 
     @Test
+    public void nextAlarmUsesTheSelectedCycleDayTime() {
+        final ShiftSchedule schedule = schedule(3, false, true, true, true)
+                .withDayTime(0, LocalTime.of(7, 15))
+                .withDayTime(1, LocalTime.of(22, 30));
+        final LocalDateTime now = LocalDateTime.of(2026, 4, 25, 8, 0);
+        final LocalDateTime next = ShiftScheduler.nextAlarmTime(schedule, LocalTime.of(9, 39),
+                now, HolidayProvider.EMPTY);
+        assertEquals(LocalDateTime.of(2026, 4, 26, 22, 30), next);
+    }
+
+    @Test
     public void nextAlarmMovesToTomorrowWhenTodayIsPast() {
         final ShiftSchedule schedule = schedule(9, false,
                 true, true, true, true, true, true, true, true, true);

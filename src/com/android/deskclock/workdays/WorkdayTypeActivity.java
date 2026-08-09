@@ -29,6 +29,7 @@ import androidx.annotation.StringRes;
 import androidx.fragment.app.FragmentActivity;
 
 import com.android.deskclock.AsyncHandler;
+import com.android.deskclock.EdgeToEdgeUtils;
 import com.android.deskclock.R;
 import com.android.deskclock.provider.Alarm;
 
@@ -73,6 +74,8 @@ public final class WorkdayTypeActivity extends FragmentActivity {
                     R.string.workday_type_shift, R.string.workday_type_shift_summary),
     };
 
+    private static final int REQUEST_SHIFT_SCHEDULE = 1001;
+
     private long mAlarmId = Alarm.INVALID_ID;
     private Alarm mAlarm;
     private final List<RadioButton> mRadios = new ArrayList<>(OPTIONS.length);
@@ -90,7 +93,9 @@ public final class WorkdayTypeActivity extends FragmentActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        EdgeToEdgeUtils.configureWindow(getWindow());
         setContentView(R.layout.activity_workday_type);
+        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content));
 
         mAlarmId = getIntent().getLongExtra(EXTRA_ALARM_ID, Alarm.INVALID_ID);
 
@@ -104,6 +109,16 @@ public final class WorkdayTypeActivity extends FragmentActivity {
             mRadios.add(radio);
             row.setOnClickListener(v -> onOptionSelected(option.mType));
             list.addView(row);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_SHIFT_SCHEDULE && resultCode == RESULT_OK) {
+            // The schedule editor is a child of this screen. Once it is saved, return directly to
+            // the alarm editor rather than leaving the workday-type chooser on screen.
+            finish();
         }
     }
 
@@ -132,7 +147,8 @@ public final class WorkdayTypeActivity extends FragmentActivity {
                 mAlarm.workdayType = WorkdayType.SHIFT;
                 saveAlarm();
             }
-            startActivity(ShiftScheduleActivity.createIntent(this, mAlarm.id));
+            startActivityForResult(ShiftScheduleActivity.createIntent(this, mAlarm.id),
+                    REQUEST_SHIFT_SCHEDULE);
             return;
         }
         if (mAlarm.workdayType == type) {

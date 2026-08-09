@@ -87,8 +87,11 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
      */
     private static final int VERSION_13 = 14;
 
+    /** Added optional per-cycle-day alarm times for shift schedules. */
+    private static final int VERSION_14 = 15;
+
     /** The current database version. */
-    private static final int DATABASE_VERSION = VERSION_13;
+    private static final int DATABASE_VERSION = VERSION_14;
 
     // This creates a default alarm at 8:30 for every Mon,Tue,Wed,Thu,Fri
     private static final String DEFAULT_ALARM_1 = "(8, 30, 31, 0, 1, '', NULL, 0, 0);";
@@ -137,7 +140,8 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
                 ClockContract.AlarmsColumns.SHIFT_CYCLE_DAYS + " INTEGER NOT NULL DEFAULT 7, " +
                 ClockContract.AlarmsColumns.SHIFT_START_DATE + " TEXT NOT NULL DEFAULT '', " +
                 ClockContract.AlarmsColumns.SHIFT_SKIP_HOLIDAY + " INTEGER NOT NULL DEFAULT 0, " +
-                ClockContract.AlarmsColumns.SHIFT_DAYS_MASK + " TEXT NOT NULL DEFAULT '');");
+                ClockContract.AlarmsColumns.SHIFT_DAYS_MASK + " TEXT NOT NULL DEFAULT '', " +
+                ClockContract.AlarmsColumns.SHIFT_TIMES + " TEXT NOT NULL DEFAULT '');");
         LogUtils.i("Alarms Table created");
     }
 
@@ -207,6 +211,8 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
                 "INTEGER NOT NULL DEFAULT 0");
         addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_DAYS_MASK,
                 "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_TIMES,
+                "TEXT NOT NULL DEFAULT ''");
         createHolidayTable(db);
     }
 
@@ -223,6 +229,8 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
         addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_SKIP_HOLIDAY,
                 "INTEGER NOT NULL DEFAULT 0");
         addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_DAYS_MASK,
+                "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_TIMES,
                 "TEXT NOT NULL DEFAULT ''");
         createHolidayTable(db);
     }
@@ -392,6 +400,11 @@ public class ClockDatabaseHelper extends SQLiteOpenHelper {
             addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_DAYS_MASK,
                     "TEXT NOT NULL DEFAULT ''");
             createHolidayTable(db);
+        }
+
+        if (oldVersion < VERSION_14) {
+            addColumnIfMissing(db, ALARMS_TABLE_NAME, ClockContract.AlarmsColumns.SHIFT_TIMES,
+                    "TEXT NOT NULL DEFAULT ''");
         }
     }
 

@@ -20,11 +20,13 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 /**
  * Exercises the shift schedule data model: cycle math across month and year boundaries, the
@@ -155,6 +157,20 @@ public class ShiftScheduleTest {
         final ShiftSchedule withSkip = original.withSkipHolidays(true);
         assertTrue(withSkip.isSkipHolidays());
         assertFalse(original.isSkipHolidays());
+    }
+
+    @Test
+    public void perDayTimesRoundTripAndUseFallbacks() {
+        final ShiftSchedule original = schedule(3, true, true, true, true)
+                .withDayTime(0, LocalTime.of(8, 35))
+                .withDayTime(2, LocalTime.of(22, 5));
+        assertEquals("08:35||22:05", original.getTimesMask());
+
+        final LocalTime[] parsed = ShiftSchedule.parseTimesMask(original.getTimesMask(), 3);
+        assertEquals(LocalTime.of(8, 35), parsed[0]);
+        assertNull(parsed[1]);
+        assertEquals(LocalTime.of(22, 5), parsed[2]);
+        assertEquals(LocalTime.of(7, 0), original.getDayTime(1, LocalTime.of(7, 0)));
     }
 
     @Test

@@ -17,6 +17,7 @@
 package com.android.deskclock.workdays;
 
 import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -31,6 +32,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
 
 import com.android.deskclock.AsyncHandler;
+import com.android.deskclock.EdgeToEdgeUtils;
 import com.android.deskclock.R;
 import com.android.deskclock.provider.Alarm;
 
@@ -38,6 +40,7 @@ import com.google.android.material.materialswitch.MaterialSwitch;
 
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Calendar;
 import java.util.Locale;
 
@@ -82,7 +85,9 @@ public final class ShiftScheduleActivity extends FragmentActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        EdgeToEdgeUtils.configureWindow(getWindow());
         setContentView(R.layout.activity_shift_schedule);
+        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content));
 
         mAlarmId = getIntent().getLongExtra(EXTRA_ALARM_ID, Alarm.INVALID_ID);
         mAlarm = mAlarmId == Alarm.INVALID_ID ? null : Alarm.getAlarm(getContentResolver(), mAlarmId);
@@ -139,17 +144,21 @@ public final class ShiftScheduleActivity extends FragmentActivity {
     private void rebuildDayRows(LocalDate today, LocalDate cycleStart) {
         mDaysContainer.removeAllViews();
         final LayoutInflater inflater = getLayoutInflater();
-        final String alarmTime = DateFormat.getTimeFormat(this).format(
-                alarmTimeCalendar().getTime());
+        final LocalTime fallbackTime = LocalTime.of(mAlarm.hour, mAlarm.minutes);
         for (int i = 0; i < mSchedule.getCycleDays(); i++) {
             final int dayIndex = i;
             final LocalDate date = cycleStart.plusDays(dayIndex);
             final boolean enabled = mSchedule.isDayEnabled(dayIndex);
+            final LocalTime dayTime = mSchedule.getDayTime(dayIndex, fallbackTime);
 
             final View row = inflater.inflate(R.layout.shift_day_item, mDaysContainer, false);
             ((TextView) row.findViewById(R.id.shift_day_title))
                     .setText(getString(R.string.shift_day_title, dayIndex + 1));
-            ((TextView) row.findViewById(R.id.shift_day_time)).setText(alarmTime);
+            final TextView dayTimeView = row.findViewById(R.id.shift_day_time);
+            dayTimeView.setText(DateFormat.getTimeFormat(this).format(
+                    timeCalendar(dayTime).getTime()));
+            row.setOnClickListener(v -> showTimePickerDialog(dayIndex));
+            dayTimeView.setOnClickListener(v -> showTimePickerDialog(dayIndex));
 
             final TextView todayView = row.findViewById(R.id.shift_day_today);
             todayView.setVisibility(date.equals(today) ? View.VISIBLE : View.GONE);
@@ -167,6 +176,20 @@ public final class ShiftScheduleActivity extends FragmentActivity {
             });
             mDaysContainer.addView(row);
         }
+    }
+
+    /** Shows a time picker for the selected cycle day. */
+    private void showTimePickerDialog(int dayIndex) {
+        final LocalTime fallbackTime = LocalTime.of(mAlarm.hour, mAlarm.minutes);
+        final LocalTime currentTime = mSchedule.getDayTime(dayIndex, fallbackTime);
+        final boolean is24Hour = DateFormat.is24HourFormat(this);
+        new TimePickerDialog(this,
+                (view, hourOfDay, minute) -> {
+                    mSchedule = mSchedule.withDayTime(dayIndex, LocalTime.of(hourOfDay, minute));
+                    rebuild();
+                },
+                currentTime.getHour(), currentTime.getMinute(), is24Hour)
+                .show();
     }
 
     /** Shows a NumberPicker dialog for the cycle length. */
@@ -213,19 +236,26 @@ public final class ShiftScheduleActivity extends FragmentActivity {
         alarm.shiftStartDate = mSchedule.getStartDate().toString();
         alarm.shiftSkipHoliday = mSchedule.isSkipHolidays();
         alarm.shiftDaysMask = mSchedule.getDaysMask();
+        alarm.shiftTimes = mSchedule.getTimesMask();
 
         AsyncHandler.post(() -> {
-            Alarm.updateAlarm(appContext.getContentResolver(), alarm);
-            WorkdayAlarmScheduler.rescheduleAlarm(appContext, alarm);
+            try {
+                Alarm.updateAlarm(appContext.getContentResolver(), alarm);
+                WorkdayAlarmScheduler.rescheduleAlarm(appContext, alarm);
+            } finally {
+                runOnUiThread(() -> {
+                    setResult(RESULT_OK);
+                    finish();
+                });
+            }
         });
-        finish();
     }
 
-    /** @return a calendar at the alarm's time of day on today's date */
-    private Calendar alarmTimeCalendar() {
+    /** @return a calendar at the given alarm time on today's date */
+    private Calendar timeCalendar(LocalTime time) {
         final Calendar calendar = Calendar.getInstance();
-        calendar.set(Calendar.HOUR_OF_DAY, mAlarm.hour);
-        calendar.set(Calendar.MINUTE, mAlarm.minutes);
+        calendar.set(Calendar.HOUR_OF_DAY, time.getHour());
+        calendar.set(Calendar.MINUTE, time.getMinute());
         calendar.set(Calendar.SECOND, 0);
         calendar.set(Calendar.MILLISECOND, 0);
         return calendar;

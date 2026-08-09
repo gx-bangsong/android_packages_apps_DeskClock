@@ -171,6 +171,13 @@ public final class ClockContract {
          * <p>Type: TEXT</p>
          */
         String SHIFT_DAYS_MASK = "shift_days_mask";
+
+        /**
+         * Optional per-cycle-day alarm times encoded as {@code HH:mm|HH:mm|...}; an empty entry
+         * uses the alarm's ordinary time.
+         * <p>Type: TEXT</p>
+         */
+        String SHIFT_TIMES = "shift_times";
     }
 
     /**

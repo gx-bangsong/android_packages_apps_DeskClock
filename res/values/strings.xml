@@ -1106,5 +1106,7 @@
     <string name="update_holiday_data_summary">Manually update legal holiday and workday data</string>
     <string name="update_holiday_data_success">Holiday data updated</string>
     <string name="update_holiday_data_failure">Holiday data update failed: %1$s</string>
+    <string name="import_holiday_data_title">Import holiday JSON</string>
+    <string name="import_holiday_data_summary">Import legal holiday and make-up workday data from a JSON file</string>
 
 </resources>

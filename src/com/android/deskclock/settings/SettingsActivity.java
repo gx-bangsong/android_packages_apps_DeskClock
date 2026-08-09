@@ -19,6 +19,7 @@ package com.android.deskclock.settings;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.os.Bundle;
@@ -72,6 +73,9 @@ public final class SettingsActivity extends ToolbarBaseActivity {
     public static final String KEY_SHAKE_ACTION = "shake_action";
     public static final String KEY_HOLIDAY_DATA_URL = "holiday_data_url";
     public static final String KEY_UPDATE_HOLIDAY_DATA = "update_holiday_data";
+    public static final String KEY_IMPORT_HOLIDAY_DATA = "import_holiday_data";
+
+    private static final int REQUEST_IMPORT_HOLIDAY_DATA = 2001;
 
     public static final String DEFAULT_VOLUME_BEHAVIOR = "0";
     public static final String VOLUME_BEHAVIOR_SNOOZE = "1";
@@ -216,6 +220,9 @@ public final class SettingsActivity extends ToolbarBaseActivity {
                 case KEY_UPDATE_HOLIDAY_DATA:
                     updateHolidayData(pref);
                     return true;
+                case KEY_IMPORT_HOLIDAY_DATA:
+                    importHolidayData(pref);
+                    return true;
             }
 
             return false;
@@ -239,6 +246,61 @@ public final class SettingsActivity extends ToolbarBaseActivity {
             }
             pref.setEnabled(false);
             repository.updateHolidayData((success, errorMessage) -> {
+                pref.setEnabled(true);
+                final String message = success
+                        ? getString(R.string.update_holiday_data_success)
+                        : getString(R.string.update_holiday_data_failure, errorMessage);
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show();
+            });
+        }
+
+        /** Opens the system document picker for a local holiday JSON file. */
+        private void importHolidayData(final Preference pref) {
+            final Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                    // Some document providers report JSON as text/plain or application/octet-stream.
+                    .setType("*/*")
+                    .putExtra(Intent.EXTRA_MIME_TYPES, new String[] {
+                            "application/json", "text/json", "text/plain", "application/octet-stream"
+                    });
+            startActivityForResult(intent, REQUEST_IMPORT_HOLIDAY_DATA);
+        }
+
+        @Override
+        public void onActivityResult(int requestCode, int resultCode, Intent data) {
+            super.onActivityResult(requestCode, resultCode, data);
+            if (requestCode != REQUEST_IMPORT_HOLIDAY_DATA
+                    || resultCode != android.app.Activity.RESULT_OK
+                    || data == null || data.getData() == null) {
+                return;
+            }
+
+            final Context context = getContext();
+            if (context == null) {
+                return;
+            }
+            final Context appContext = context.getApplicationContext();
+            HolidayRepository.init(appContext);
+            final HolidayRepository repository = HolidayRepository.getInstanceOrNull();
+            final Preference pref = findPreference(KEY_IMPORT_HOLIDAY_DATA);
+            if (repository == null || pref == null) {
+                return;
+            }
+            final Uri uri = data.getData();
+            try {
+                final int takeFlags = data.getFlags() &
+                        (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                if (takeFlags != 0) {
+                    context.getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                }
+            } catch (SecurityException ignored) {
+                // A provider may grant a one-shot URI without persistable access; it is still
+                // readable by the import task below.
+            }
+            pref.setEnabled(false);
+            repository.importHolidayData(uri, (success, errorMessage) -> {
                 pref.setEnabled(true);
                 final String message = success
                         ? getString(R.string.update_holiday_data_success)
@@ -359,6 +421,11 @@ public final class SettingsActivity extends ToolbarBaseActivity {
             final Preference updateHolidayDataPref = findPreference(KEY_UPDATE_HOLIDAY_DATA);
             if (updateHolidayDataPref != null) {
                 updateHolidayDataPref.setOnPreferenceClickListener(this);
+            }
+
+            final Preference importHolidayDataPref = findPreference(KEY_IMPORT_HOLIDAY_DATA);
+            if (importHolidayDataPref != null) {
+                importHolidayDataPref.setOnPreferenceClickListener(this);
             }
         }
 

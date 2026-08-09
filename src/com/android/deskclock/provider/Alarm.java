@@ -78,6 +78,7 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
             SHIFT_START_DATE,
             SHIFT_SKIP_HOLIDAY,
             SHIFT_DAYS_MASK,
+            SHIFT_TIMES,
     };
 
     private static final String[] QUERY_ALARMS_WITH_INSTANCES_COLUMNS = {
@@ -106,6 +107,7 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
             ClockDatabaseHelper.ALARMS_TABLE_NAME + "." + SHIFT_START_DATE,
             ClockDatabaseHelper.ALARMS_TABLE_NAME + "." + SHIFT_SKIP_HOLIDAY,
             ClockDatabaseHelper.ALARMS_TABLE_NAME + "." + SHIFT_DAYS_MASK,
+            ClockDatabaseHelper.ALARMS_TABLE_NAME + "." + SHIFT_TIMES,
     };
 
     /**
@@ -133,8 +135,8 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
     public static final int INSTANCE_LABEL_INDEX = 17;
     public static final int INSTANCE_VIBRATE_INDEX = 18;
 
-    private static final int COLUMN_COUNT = 15;
-    private static final int ALARM_JOIN_INSTANCE_COLUMN_COUNT = 24;
+    private static final int COLUMN_COUNT = 16;
+    private static final int ALARM_JOIN_INSTANCE_COLUMN_COUNT = 25;
 
     /** The maximum number of days searched for the next valid workday. */
     private static final int MAX_WORKDAY_SEARCH_DAYS = 400;
@@ -157,7 +159,8 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
         values.put(SHIFT_CYCLE_DAYS, alarm.shiftCycleDays);
         values.put(SHIFT_START_DATE, alarm.shiftStartDate);
         values.put(SHIFT_SKIP_HOLIDAY, alarm.shiftSkipHoliday ? 1 : 0);
-        values.put(SHIFT_DAYS_MASK, alarm.shiftDaysMask);
+        values.put(SHIFT_DAYS_MASK, alarm.shiftDaysMask == null ? "" : alarm.shiftDaysMask);
+        values.put(SHIFT_TIMES, alarm.shiftTimes == null ? "" : alarm.shiftTimes);
         if (alarm.alert == null) {
             // We want to put null, so default alarm changes
             values.putNull(RINGTONE);
@@ -336,6 +339,9 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
      */
     public String shiftDaysMask = "";
 
+    /** Optional per-cycle-day alarm times encoded by {@link ShiftSchedule#getTimesMask()}. */
+    public String shiftTimes = "";
+
     // Creates a default alarm at the current time.
     public Alarm() {
         this(0, 0);
@@ -389,6 +395,8 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
         shiftSkipHoliday = index >= 0 && c.getInt(index) == 1;
         index = c.getColumnIndex(SHIFT_DAYS_MASK);
         shiftDaysMask = index >= 0 ? c.getString(index) : "";
+        index = c.getColumnIndex(SHIFT_TIMES);
+        shiftTimes = index >= 0 ? c.getString(index) : "";
     }
 
     Alarm(Parcel p) {
@@ -407,6 +415,7 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
         shiftStartDate = p.readString();
         shiftSkipHoliday = p.readInt() == 1;
         shiftDaysMask = p.readString();
+        shiftTimes = p.readString();
     }
 
     public String getLabelOrDefault(Context context) {
@@ -440,6 +449,7 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
         p.writeString(shiftStartDate);
         p.writeInt(shiftSkipHoliday ? 1 : 0);
         p.writeString(shiftDaysMask);
+        p.writeString(shiftTimes);
     }
 
     public int describeContents() {
@@ -552,7 +562,8 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
      * missing values fall back to safe defaults so that scheduling never crashes.
      */
     public ShiftSchedule createShiftSchedule() {
-        final int cycleDays = shiftCycleDays > 0
+        final int cycleDays = shiftCycleDays >= ShiftSchedule.MIN_CYCLE_DAYS
+                && shiftCycleDays <= ShiftSchedule.MAX_CYCLE_DAYS
                 ? shiftCycleDays : ShiftSchedule.DEFAULT_CYCLE_DAYS;
         LocalDate startDate = LocalDate.now();
         if (shiftStartDate != null && !shiftStartDate.isEmpty()) {
@@ -563,7 +574,8 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
             }
         }
         final boolean[] enabledDays = ShiftSchedule.parseDaysMask(shiftDaysMask, cycleDays);
-        return new ShiftSchedule(cycleDays, startDate, shiftSkipHoliday, enabledDays);
+        final LocalTime[] dayTimes = ShiftSchedule.parseTimesMask(shiftTimes, cycleDays);
+        return new ShiftSchedule(cycleDays, startDate, shiftSkipHoliday, enabledDays, dayTimes);
     }
 
     private static LocalDateTime toLocalDateTime(Calendar calendar) {
@@ -616,6 +628,7 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
                 ", shiftStartDate='" + shiftStartDate + '\'' +
                 ", shiftSkipHoliday=" + shiftSkipHoliday +
                 ", shiftDaysMask='" + shiftDaysMask + '\'' +
+                ", shiftTimes='" + shiftTimes + '\'' +
                 '}';
     }
 }

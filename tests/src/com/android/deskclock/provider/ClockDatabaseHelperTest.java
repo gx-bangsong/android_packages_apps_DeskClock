@@ -69,6 +69,7 @@ public class ClockDatabaseHelperTest {
         assertTrue("shift_start_date column missing", columns.contains("shift_start_date"));
         assertTrue("shift_skip_holiday column missing", columns.contains("shift_skip_holiday"));
         assertTrue("shift_days_mask column missing", columns.contains("shift_days_mask"));
+        assertTrue("shift_times column missing", columns.contains("shift_times"));
 
         // Verify holiday table exists
         assertTrue("holiday table missing",

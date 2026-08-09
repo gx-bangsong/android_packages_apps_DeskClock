@@ -28,6 +28,7 @@ import android.widget.Toolbar;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.FragmentActivity;
 
+import com.android.deskclock.EdgeToEdgeUtils;
 import com.android.deskclock.R;
 import com.android.deskclock.ThemeUtils;
 
@@ -39,7 +40,9 @@ public class ToolbarBaseActivity extends FragmentActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        EdgeToEdgeUtils.configureWindow(getWindow());
         super.setContentView(R.layout.toolbar_base_layout);
+        EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content));
 
         final Toolbar toolbar = findViewById(R.id.action_bar);
         setActionBar(toolbar);

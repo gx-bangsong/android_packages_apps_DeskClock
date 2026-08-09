@@ -87,7 +87,7 @@ public final class HolidayDataParser {
         }
         for (int i = 0; i < json.length(); i++) {
             final char c = json.charAt(i);
-            if (Character.isWhitespace(c)) {
+            if (c == '\ufeff' || Character.isWhitespace(c)) {
                 continue;
             }
             if (c == '{') {

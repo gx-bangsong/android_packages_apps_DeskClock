@@ -25,11 +25,10 @@ import java.time.LocalTime;
 /**
  * Computes the next valid firing time for shift-rotation alarms.
  *
- * <p>The scheduler walks day by day from the next occurrence of the alarm time and checks every
- * candidate date against the {@link ShiftSchedule}: disabled cycle days are rest days, legal
- * holidays are skipped when holiday skipping is enabled, and make-up (compensation) workdays
- * always ring. The search window is bounded so that a schedule in which no valid day exists
- * (e.g. every cycle day disabled) yields {@code null} instead of looping forever.</p>
+ * <p>The scheduler walks day by day from the current date and checks every candidate against the
+ * {@link ShiftSchedule}: disabled cycle days are rest days, legal holidays are skipped when
+ * holiday skipping is enabled, and make-up (compensation) workdays always ring. Each cycle day
+ * may use its own time; days without an override use the alarm's ordinary time.</p>
  */
 public final class ShiftScheduler {
 
@@ -40,7 +39,7 @@ public final class ShiftScheduler {
 
     /**
      * @param schedule the shift schedule to evaluate
-     * @param alarmTime the wall-clock time of day at which the alarm rings
+     * @param alarmTime the fallback wall-clock time for days without an override
      * @param now the current date and time
      * @param holidays holiday information, may be null if no data is available
      * @return the next valid firing time, or {@code null} if no valid day exists
@@ -52,17 +51,16 @@ public final class ShiftScheduler {
             return null;
         }
 
-        LocalDateTime candidate = now.toLocalDate().atTime(alarmTime);
-        if (!isAfter(candidate, now)) {
-            candidate = candidate.plusDays(1);
-        }
-
+        LocalDate date = now.toLocalDate();
         final int maxIterations = schedule.getCycleDays() * 2 + SEARCH_SAFETY_DAYS;
         for (int i = 0; i < maxIterations; i++) {
-            if (isWorkday(schedule, candidate.toLocalDate(), holidays)) {
+            final int dayIndex = schedule.dayIndexFor(date);
+            final LocalTime dayTime = schedule.getDayTime(dayIndex, alarmTime);
+            final LocalDateTime candidate = date.atTime(dayTime);
+            if (isAfter(candidate, now) && isWorkday(schedule, date, holidays)) {
                 return candidate;
             }
-            candidate = candidate.plusDays(1);
+            date = date.plusDays(1);
         }
         return null;
     }

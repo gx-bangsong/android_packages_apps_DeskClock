@@ -194,6 +194,12 @@
             android:title="@string/update_holiday_data_title"
             android:summary="@string/update_holiday_data_summary"
             app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="import_holiday_data"
+            android:title="@string/import_holiday_data_title"
+            android:summary="@string/import_holiday_data_summary"
+            app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
 </PreferenceScreen>

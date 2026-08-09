@@ -15,6 +15,4 @@
 -->
 
 <resources>
-    <item type="fraction" name="timer_setup_time_top_percent">0</item>
-    <item type="fraction" name="timer_setup_time_bottom_percent">0.25</item>
 </resources>
