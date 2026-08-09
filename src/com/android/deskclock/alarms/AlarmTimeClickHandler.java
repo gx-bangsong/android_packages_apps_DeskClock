@@ -30,6 +30,7 @@ import androidx.fragment.app.Fragment;
 
 import com.android.deskclock.AlarmClockFragment;
 import com.android.deskclock.AlarmUtils;
+import com.android.deskclock.EdgeToEdgeUtils;
 import com.android.deskclock.LabelDialogFragment;
 import com.android.deskclock.LogUtils;
 import com.android.deskclock.R;
@@ -177,6 +178,14 @@ public final class AlarmTimeClickHandler {
         dialog.setContentView(sheet);
         dialog.setOnDismissListener(d -> mDisableDialog = null);
         dialog.show();
+
+        // A BottomSheetDialog owns its own window, so the activity's edge-to-edge policy does not
+        // automatically reach it. Make the sheet background extend through the gesture area and
+        // keep the action rows above the navigation handle.
+        if (dialog.getWindow() != null) {
+            EdgeToEdgeUtils.configureWindow(dialog.getWindow());
+        }
+        EdgeToEdgeUtils.applyBottomInsets(sheet);
     }
 
     public void setAlarmVibrationEnabled(Alarm alarm, boolean newState) {
