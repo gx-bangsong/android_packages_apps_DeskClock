@@ -149,10 +149,14 @@ public class ClockProvider extends ContentProvider {
         SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         SQLiteDatabase db = mOpenHelper.getReadableDatabase();
 
-        // 每次查询前都确保 workday 列存在（最终兜底方案）
+        // 每次查询前都确保 workday 列存在（最终兜底方案，带异常保护）
         int match = sURIMatcher.match(uri);
         if (match == ALARMS || match == ALARMS_ID || match == ALARMS_WITH_INSTANCES) {
-            ClockDatabaseHelper.getInstance(getContext());
+            try {
+                ClockDatabaseHelper.getInstance(getContext());
+            } catch (Exception ignored) {
+                // 忽略异常，继续查询（列可能已存在）
+            }
         }
 
         // Generate the body of the query
