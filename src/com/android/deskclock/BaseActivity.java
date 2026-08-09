@@ -57,10 +57,16 @@ public abstract class BaseActivity extends AppCompatActivity {
             EdgeToEdgeUtils.applyHorizontalInsets(root);
             EdgeToEdgeUtils.applyTopInsets(appBar);
             EdgeToEdgeUtils.applyBottomInsets(bottomBarContainer);
+            EdgeToEdgeUtils.setSystemBarColors(getWindow(),
+                    ThemeUtils.resolveColor(this, android.R.attr.windowBackground),
+                    ThemeUtils.resolveColor(this, R.attr.colorSurfaceVariant));
         } else if (appBar != null) {
             EdgeToEdgeUtils.applyHorizontalInsets(root);
             EdgeToEdgeUtils.applyTopInsets(appBar);
             applyBottomInsetToFirst(root, R.id.cities_list, R.id.expired_timers_scroll);
+            EdgeToEdgeUtils.setSystemBarColors(getWindow(),
+                    ThemeUtils.resolveColor(this, R.attr.colorSurface),
+                    ThemeUtils.resolveColor(this, R.attr.colorSurface));
         } else if (hasView(R.id.cities_list, R.id.expired_timers_scroll)) {
             EdgeToEdgeUtils.applyInsets(root, true, false, true);
             applyBottomInsetToFirst(root, R.id.cities_list, R.id.expired_timers_scroll);

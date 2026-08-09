@@ -20,6 +20,7 @@ import android.graphics.Color;
 import android.view.View;
 import android.view.Window;
 
+import androidx.annotation.ColorInt;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -35,6 +36,20 @@ public final class EdgeToEdgeUtils {
         WindowCompat.setDecorFitsSystemWindows(window, false);
         window.setStatusBarColor(Color.TRANSPARENT);
         window.setNavigationBarColor(Color.TRANSPARENT);
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            window.setStatusBarContrastEnforced(false);
+            window.setNavigationBarContrastEnforced(false);
+        }
+    }
+
+    /**
+     * Sets explicit fallback colors for system bars. This keeps the gesture area visually joined
+     * to the page even on devices that add a navigation-bar scrim around transparent bars.
+     */
+    public static void setSystemBarColors(Window window, @ColorInt int statusBarColor,
+            @ColorInt int navigationBarColor) {
+        window.setStatusBarColor(statusBarColor);
+        window.setNavigationBarColor(navigationBarColor);
         if (android.os.Build.VERSION.SDK_INT >= 29) {
             window.setStatusBarContrastEnforced(false);
             window.setNavigationBarContrastEnforced(false);

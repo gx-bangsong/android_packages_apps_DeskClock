@@ -60,6 +60,18 @@ public class HolidayDataParserTest {
     }
 
     @Test
+    public void parsesYearIndexedChinaHolidayDocument() throws JSONException {
+        final String json = "{\"Years\":{\"2026\":["
+                + "{\"Name\":\"元旦\",\"StartDate\":\"2026-01-01\","
+                + "\"EndDate\":\"2026-01-03\",\"CompDays\":[\"2026-01-04\"]}"
+                + "]}}";
+        final List<Holiday> holidays = HolidayDataParser.parse(json);
+        assertEquals(1, holidays.size());
+        assertEquals("元旦", holidays.get(0).getName());
+        assertTrue(holidays.get(0).isCompWorkday(LocalDate.of(2026, 1, 4)));
+    }
+
+    @Test
     public void parsesObjectDocument() throws JSONException {
         final String json = "{\"code\":200,\"holidays\":["
                 + "{\"name\":\"国庆节\",\"startDate\":\"2026-10-01\",\"endDate\":\"2026-10-07\"}"

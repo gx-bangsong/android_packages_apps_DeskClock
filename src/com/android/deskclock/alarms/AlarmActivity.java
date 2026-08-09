@@ -41,7 +41,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.view.KeyEvent;
-import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -68,13 +67,8 @@ import com.android.deskclock.events.Events;
 import com.android.deskclock.provider.Alarm;
 import com.android.deskclock.provider.AlarmInstance;
 import com.android.deskclock.widget.CircleView;
-import com.android.deskclock.workdays.WorkdayType;
-import com.google.android.material.bottomsheet.BottomSheetDialog;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 public class AlarmActivity extends BaseActivity
         implements View.OnClickListener, View.OnTouchListener {
@@ -159,9 +153,6 @@ public class AlarmActivity extends BaseActivity
     private ValueAnimator mSnoozeAnimator;
     private ValueAnimator mDismissAnimator;
     private ValueAnimator mPulseAnimator;
-
-    /** The dismiss options sheet; shown when dismissing a recurring alarm. */
-    private BottomSheetDialog mDismissDialog;
 
     private int mInitialPointerIndex = MotionEvent.INVALID_POINTER_ID;
 
@@ -518,7 +509,6 @@ public class AlarmActivity extends BaseActivity
      * Perform dismiss animation and send dismiss intent.
      */
     private void dismiss() {
-        dismissDialog();
         mAlarmHandled = true;
         LOGGER.v("Dismissed: %s", mAlarmInstance);
 
@@ -537,78 +527,14 @@ public class AlarmActivity extends BaseActivity
     }
 
     /**
-     * Handles the dismiss action. Recurring alarms offer a choice of what "dismiss" means:
-     * skip only the current occurrence, turn off the repeating alarm entirely, or cancel.
-     * One-time alarms are dismissed directly.
+     * Dismissing from the ringing screen always dismisses the current occurrence directly. The
+     * once/all choice belongs to the switch in the alarm list, where it is handled by
+     * {@link AlarmTimeClickHandler}.
      */
     private void showDismissOptions() {
-        if (mAlarmHandled || (mDismissDialog != null && mDismissDialog.isShowing())) {
-            return;
-        }
-
-        final Alarm alarm = mAlarmInstance.mAlarmId == null
-                ? null : Alarm.getAlarm(getContentResolver(), mAlarmInstance.mAlarmId);
-        final boolean recurring = alarm != null
-                && (alarm.daysOfWeek.isRepeating() || alarm.workdayType != WorkdayType.NONE);
-        if (!recurring) {
+        if (!mAlarmHandled) {
             dismiss();
-            return;
         }
-
-        final BottomSheetDialog dialog = new BottomSheetDialog(this);
-        final View sheet = getLayoutInflater().inflate(R.layout.dismiss_alarm_dialog, null);
-
-        final TextView timeView = sheet.findViewById(R.id.dismiss_dialog_time);
-        timeView.setText(AlarmUtils.getFormattedTime(this, mAlarmInstance.getAlarmTime()));
-
-        final TextView dismissOnce = sheet.findViewById(R.id.dismiss_once);
-        dismissOnce.setText(getString(R.string.dismiss_once, formatDismissDate(
-                mAlarmInstance.getAlarmTime().getTime())));
-        dismissOnce.setOnClickListener(v -> dismiss());
-
-        final TextView turnOff = sheet.findViewById(R.id.turn_off_repeating_alarm);
-        turnOff.setText(R.string.turn_off_repeating_alarm);
-        turnOff.setOnClickListener(v -> turnOffRepeatingAlarm());
-
-        sheet.findViewById(R.id.dismiss_dialog_cancel).setOnClickListener(v -> dialog.dismiss());
-
-        mDismissDialog = dialog;
-        dialog.setContentView(sheet);
-        dialog.setOnDismissListener(d -> mDismissDialog = null);
-        dialog.show();
-    }
-
-    /**
-     * Dismisses the current occurrence and disables the parent alarm so that no further
-     * occurrences are scheduled.
-     */
-    private void turnOffRepeatingAlarm() {
-        final Alarm alarm = mAlarmInstance.mAlarmId == null
-                ? null : Alarm.getAlarm(getContentResolver(), mAlarmInstance.mAlarmId);
-        if (alarm != null) {
-            alarm.enabled = false;
-            Alarm.updateAlarm(getContentResolver(), alarm);
-        }
-        Events.sendAlarmEvent(R.string.action_disable, R.string.label_deskclock);
-        dismiss();
-    }
-
-    /** Dismisses the options sheet if it is currently showing. */
-    private void dismissDialog() {
-        if (mDismissDialog != null && mDismissDialog.isShowing()) {
-            mDismissDialog.dismiss();
-        }
-        mDismissDialog = null;
-    }
-
-    /**
-     * Formats the date of the alarm occurrence for the "dismiss just this one" option, e.g.
-     * "Dec 19 (Sat)" or "12月19日(周六)".
-     */
-    private String formatDismissDate(Date date) {
-        final SimpleDateFormat formatter = new SimpleDateFormat(
-                getString(R.string.dismiss_once_date_format), Locale.getDefault());
-        return formatter.format(date);
     }
 
     /**

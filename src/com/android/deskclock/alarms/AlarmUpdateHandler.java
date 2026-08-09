@@ -145,6 +145,29 @@ public final class AlarmUpdateHandler {
     }
 
     /**
+     * Skips the next occurrence without disabling the repeating alarm. This is used by the alarm
+     * list's "dismiss once" action; unlike deleteInstanceAndUpdateParent(), it also works for
+     * workday alarms whose weekly day mask is not repeating.
+     */
+    public void asyncSkipNextAlarm(final Alarm alarm) {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.execute(() -> {
+            final ContentResolver cr = mAppContext.getContentResolver();
+            final AlarmInstance current = AlarmInstance.getNextUpcomingInstanceByAlarmId(cr,
+                    alarm.id);
+            if (current == null) {
+                return;
+            }
+            AlarmStateManager.deleteAllInstances(mAppContext, alarm.id);
+            final AlarmInstance next = alarm.createInstanceAfter(current.getAlarmTime());
+            if (next != null && alarm.enabled) {
+                AlarmInstance.addInstance(cr, next);
+                AlarmStateManager.registerInstance(mAppContext, next, true);
+            }
+        });
+    }
+
+    /**
      * Deletes an alarm on the background.
      *
      * @param alarm The alarm to be deleted.

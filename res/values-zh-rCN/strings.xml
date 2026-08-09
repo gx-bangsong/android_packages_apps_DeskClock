@@ -416,6 +416,7 @@
 
     <!-- 关闭重复闹钟时的选项 -->
     <string name="dismiss_once">仅在%1$s关闭一次</string>
+    <string name="dismiss_once_without_date">仅关闭这一次</string>
     <string name="dismiss_once_date_format">M月d日(E)</string>
     <string name="turn_off_repeating_alarm">关闭这个重复闹钟</string>
 

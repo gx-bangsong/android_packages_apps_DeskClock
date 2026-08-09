@@ -44,6 +44,7 @@ import com.android.deskclock.data.DataModel;
 import com.android.deskclock.events.Events;
 import com.android.deskclock.provider.Alarm;
 import com.android.deskclock.provider.AlarmInstance;
+import com.android.deskclock.workdays.WorkdayType;
 
 import java.util.Calendar;
 import java.util.List;
@@ -235,7 +236,7 @@ public final class AlarmStateManager extends BroadcastReceiver {
             return;
         }
 
-        if (!alarm.daysOfWeek.isRepeating()) {
+        if (!alarm.daysOfWeek.isRepeating() && alarm.workdayType == WorkdayType.NONE) {
             if (alarm.deleteAfterUse) {
                 LogUtils.i("Deleting parent alarm: " + alarm.id);
                 Alarm.deleteAlarm(cr, alarm.id);
@@ -245,8 +246,8 @@ public final class AlarmStateManager extends BroadcastReceiver {
                 Alarm.updateAlarm(cr, alarm);
             }
         } else {
-            // Schedule the next repeating instance which may be before the current instance if a
-            // time jump has occurred. Otherwise, if the current instance is the next instance
+            // Schedule the next repeating/workday instance, which may be before the current
+            // instance if a time jump has occurred. Otherwise, if the current instance is the next instance
             // and has already been fired, schedule the subsequent instance.
             AlarmInstance nextRepeatedInstance = alarm.createInstanceAfter(getCurrentTime());
             if (instance.mAlarmState > AlarmInstance.FIRED_STATE

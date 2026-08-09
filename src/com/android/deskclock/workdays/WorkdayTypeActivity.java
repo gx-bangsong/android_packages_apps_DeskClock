@@ -31,6 +31,7 @@ import androidx.fragment.app.FragmentActivity;
 import com.android.deskclock.AsyncHandler;
 import com.android.deskclock.EdgeToEdgeUtils;
 import com.android.deskclock.R;
+import com.android.deskclock.ThemeUtils;
 import com.android.deskclock.provider.Alarm;
 
 import java.util.ArrayList;
@@ -94,6 +95,9 @@ public final class WorkdayTypeActivity extends FragmentActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdgeUtils.configureWindow(getWindow());
+        EdgeToEdgeUtils.setSystemBarColors(getWindow(),
+                ThemeUtils.resolveColor(this, R.attr.colorSurface),
+                ThemeUtils.resolveColor(this, R.attr.colorSurface));
         setContentView(R.layout.activity_workday_type);
         EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content), true, false, true);
 

@@ -22,6 +22,7 @@ import org.json.JSONObject;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -30,7 +31,8 @@ import java.util.List;
  * <p>Two shapes are accepted:</p>
  * <ul>
  *   <li>a top-level JSON array of holiday objects, or</li>
- *   <li>a JSON object containing a {@code "holidays"} (or {@code "data"}) array.</li>
+ *   <li>a JSON object containing a {@code "holidays"} (or {@code "data"}) array, or the
+ *       year-indexed {@code "Years"} object used by the default China holiday API.</li>
  * </ul>
  *
  * <p>Each holiday object may use either {@code startDate}/{@code endDate} or the underscore
@@ -54,28 +56,44 @@ public final class HolidayDataParser {
      */
     public static List<Holiday> parse(String json) throws JSONException {
         final Object root = readRoot(json);
-        final JSONArray array;
+        final List<JSONArray> arrays = new ArrayList<>();
         if (root instanceof JSONArray) {
-            array = (JSONArray) root;
+            arrays.add((JSONArray) root);
         } else if (root instanceof JSONObject) {
             final JSONObject object = (JSONObject) root;
-            array = firstArray(object, "holidays", "data");
-            if (array == null) {
-                throw new JSONException("JSON document must contain a \"holidays\" array");
+            final JSONArray directArray = firstArray(object, "holidays", "data");
+            if (directArray != null) {
+                arrays.add(directArray);
+            } else {
+                // The default China holiday API stores entries under a Years object:
+                // { "Years": { "2026": [ ... ], "2025": [ ... ] } }.
+                final JSONObject years = firstObject(object, "Years", "years");
+                if (years != null) {
+                    final Iterator<String> keys = years.keys();
+                    while (keys.hasNext()) {
+                        final Object value = years.opt(keys.next());
+                        if (value instanceof JSONArray) {
+                            arrays.add((JSONArray) value);
+                        }
+                    }
+                }
             }
-        } else {
-            throw new JSONException("JSON document must be an array or an object");
+        }
+        if (arrays.isEmpty()) {
+            throw new JSONException("JSON document must contain a holiday array");
         }
 
-        final List<Holiday> holidays = new ArrayList<>(array.length());
-        for (int i = 0; i < array.length(); i++) {
-            final Object value = array.opt(i);
-            if (!(value instanceof JSONObject)) {
-                continue;
-            }
-            final Holiday holiday = parseHoliday((JSONObject) value);
-            if (holiday != null) {
-                holidays.add(holiday);
+        final List<Holiday> holidays = new ArrayList<>();
+        for (JSONArray array : arrays) {
+            for (int i = 0; i < array.length(); i++) {
+                final Object value = array.opt(i);
+                if (!(value instanceof JSONObject)) {
+                    continue;
+                }
+                final Holiday holiday = parseHoliday((JSONObject) value);
+                if (holiday != null) {
+                    holidays.add(holiday);
+                }
             }
         }
         return holidays;
@@ -103,20 +121,21 @@ public final class HolidayDataParser {
 
     private static Holiday parseHoliday(JSONObject object) {
         try {
-            final String name = firstString(object, "name", "title", "holiday");
-            final String startText = firstString(object, "startDate", "start_date", "date");
+            final String name = firstString(object, "name", "Name", "title", "holiday");
+            final String startText = firstString(object, "startDate", "StartDate",
+                    "start_date", "date");
             if (startText == null) {
                 return null;
             }
             final LocalDate startDate = parseDate(startText);
-            final String endText = firstString(object, "endDate", "end_date");
+            final String endText = firstString(object, "endDate", "EndDate", "end_date");
             final LocalDate endDate = endText == null ? startDate : parseDate(endText);
             if (endDate.toEpochDay() < startDate.toEpochDay()) {
                 return null;
             }
 
             final List<LocalDate> compDays = new ArrayList<>();
-            final JSONArray compArray = firstArray(object, "compDays", "comp_days",
+            final JSONArray compArray = firstArray(object, "compDays", "CompDays", "comp_days",
                     "compensationDays", "makeupDays");
             if (compArray != null) {
                 for (int i = 0; i < compArray.length(); i++) {
@@ -126,7 +145,7 @@ public final class HolidayDataParser {
                     }
                 }
             } else {
-                final String singleComp = firstString(object, "compDays", "comp_days");
+                final String singleComp = firstString(object, "compDays", "CompDays", "comp_days");
                 if (singleComp != null) {
                     addDate(compDays, singleComp);
                 }
@@ -186,6 +205,16 @@ public final class HolidayDataParser {
             final Object value = object.opt(key);
             if (value instanceof JSONArray) {
                 return (JSONArray) value;
+            }
+        }
+        return null;
+    }
+
+    private static JSONObject firstObject(JSONObject object, String... keys) {
+        for (String key : keys) {
+            final Object value = object.opt(key);
+            if (value instanceof JSONObject) {
+                return (JSONObject) value;
             }
         }
         return null;

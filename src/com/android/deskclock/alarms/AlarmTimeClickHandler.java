@@ -19,6 +19,10 @@ package com.android.deskclock.alarms;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.format.DateFormat;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.TextView;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 
@@ -34,7 +38,9 @@ import com.android.deskclock.events.Events;
 import com.android.deskclock.provider.Alarm;
 import com.android.deskclock.provider.AlarmInstance;
 import com.android.deskclock.ringtone.RingtonePickerActivity;
+import com.android.deskclock.workdays.WorkdayType;
 import com.android.deskclock.workdays.WorkdayTypeActivity;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 
 import java.util.Calendar;
 
@@ -54,6 +60,7 @@ public final class AlarmTimeClickHandler {
 
     private Alarm mSelectedAlarm;
     private Bundle mPreviousDaysOfWeekMap;
+    private BottomSheetDialog mDisableDialog;
 
     public AlarmTimeClickHandler(Fragment fragment, Bundle savedState,
             AlarmUpdateHandler alarmUpdateHandler, ScrollHandler smoothScrollController) {
@@ -91,14 +98,84 @@ public final class AlarmTimeClickHandler {
         }
     }
 
-    public void setAlarmEnabled(Alarm alarm, boolean newState) {
-        if (newState != alarm.enabled) {
-            alarm.enabled = newState;
-            Events.sendAlarmEvent(newState ? R.string.action_enable : R.string.action_disable,
-                    R.string.label_deskclock);
-            mAlarmUpdateHandler.asyncUpdateAlarm(alarm, alarm.enabled, false);
-            LOGGER.d("Updating alarm enabled state to " + newState);
+    /**
+     * Changes the enabled state from the alarm list. Disabling a repeating alarm first asks
+     * whether only its next occurrence should be skipped or all future occurrences should be
+     * turned off.
+     *
+     * @return {@code false} when the switch change is deferred until the options sheet closes
+     */
+    public boolean setAlarmEnabled(Alarm alarm, boolean newState) {
+        if (newState == alarm.enabled) {
+            return true;
         }
+        if (!newState && isRepeating(alarm)) {
+            showDisableOptions(alarm);
+            return false;
+        }
+
+        alarm.enabled = newState;
+        Events.sendAlarmEvent(newState ? R.string.action_enable : R.string.action_disable,
+                R.string.label_deskclock);
+        mAlarmUpdateHandler.asyncUpdateAlarm(alarm, alarm.enabled, false);
+        LOGGER.d("Updating alarm enabled state to " + newState);
+        return true;
+    }
+
+    private boolean isRepeating(Alarm alarm) {
+        return alarm.daysOfWeek.isRepeating() || alarm.workdayType != WorkdayType.NONE;
+    }
+
+    /** Shows the once/all choice when a repeating alarm is disabled from the list. */
+    private void showDisableOptions(final Alarm alarm) {
+        if (mDisableDialog != null && mDisableDialog.isShowing()) {
+            return;
+        }
+        final Context activityContext = mFragment.getActivity();
+        if (activityContext == null) {
+            return;
+        }
+
+        final AlarmInstance nextInstance = AlarmInstance.getNextUpcomingInstanceByAlarmId(
+                mContext.getContentResolver(), alarm.id);
+        final BottomSheetDialog dialog = new BottomSheetDialog(activityContext);
+        final View sheet = LayoutInflater.from(activityContext)
+                .inflate(R.layout.dismiss_alarm_dialog, null);
+        final TextView timeView = sheet.findViewById(R.id.dismiss_dialog_time);
+        if (nextInstance == null) {
+            timeView.setVisibility(View.GONE);
+        } else {
+            timeView.setText(AlarmUtils.getFormattedTime(activityContext,
+                    nextInstance.getAlarmTime()));
+        }
+
+        final TextView dismissOnce = sheet.findViewById(R.id.dismiss_once);
+        if (nextInstance == null) {
+            dismissOnce.setText(R.string.dismiss_once_without_date);
+        } else {
+            final String date = DateFormat.getMediumDateFormat(activityContext)
+                    .format(nextInstance.getAlarmTime().getTime());
+            dismissOnce.setText(activityContext.getString(R.string.dismiss_once, date));
+        }
+        dismissOnce.setOnClickListener(v -> {
+            dialog.dismiss();
+            mAlarmUpdateHandler.asyncSkipNextAlarm(alarm);
+        });
+
+        final TextView turnOff = sheet.findViewById(R.id.turn_off_repeating_alarm);
+        turnOff.setText(R.string.turn_off_repeating_alarm);
+        turnOff.setOnClickListener(v -> {
+            dialog.dismiss();
+            alarm.enabled = false;
+            Events.sendAlarmEvent(R.string.action_disable, R.string.label_deskclock);
+            mAlarmUpdateHandler.asyncUpdateAlarm(alarm, false, false);
+        });
+        sheet.findViewById(R.id.dismiss_dialog_cancel).setOnClickListener(v -> dialog.dismiss());
+
+        mDisableDialog = dialog;
+        dialog.setContentView(sheet);
+        dialog.setOnDismissListener(d -> mDisableDialog = null);
+        dialog.show();
     }
 
     public void setAlarmVibrationEnabled(Alarm alarm, boolean newState) {

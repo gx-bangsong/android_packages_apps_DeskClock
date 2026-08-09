@@ -41,6 +41,9 @@ public class ToolbarBaseActivity extends FragmentActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdgeUtils.configureWindow(getWindow());
+        EdgeToEdgeUtils.setSystemBarColors(getWindow(),
+                ThemeUtils.resolveColor(this, R.attr.colorSurface),
+                ThemeUtils.resolveColor(this, R.attr.colorSurface));
         super.setContentView(R.layout.toolbar_base_layout);
         EdgeToEdgeUtils.applyHorizontalInsets(findViewById(R.id.content_parent));
         EdgeToEdgeUtils.applyTopInsets(findViewById(R.id.app_bar));

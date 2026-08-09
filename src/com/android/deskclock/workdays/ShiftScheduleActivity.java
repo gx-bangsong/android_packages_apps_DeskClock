@@ -34,6 +34,7 @@ import androidx.fragment.app.FragmentActivity;
 import com.android.deskclock.AsyncHandler;
 import com.android.deskclock.EdgeToEdgeUtils;
 import com.android.deskclock.R;
+import com.android.deskclock.ThemeUtils;
 import com.android.deskclock.provider.Alarm;
 
 import com.google.android.material.materialswitch.MaterialSwitch;
@@ -86,6 +87,9 @@ public final class ShiftScheduleActivity extends FragmentActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdgeUtils.configureWindow(getWindow());
+        EdgeToEdgeUtils.setSystemBarColors(getWindow(),
+                ThemeUtils.resolveColor(this, R.attr.colorSurface),
+                ThemeUtils.resolveColor(this, R.attr.colorSurface));
         setContentView(R.layout.activity_shift_schedule);
         EdgeToEdgeUtils.applyInsets(findViewById(android.R.id.content), true, false, true);
         EdgeToEdgeUtils.applyBottomInsets(findViewById(R.id.shift_schedule_scroll));
