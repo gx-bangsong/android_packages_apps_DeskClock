@@ -469,4 +469,6 @@
     <string name="update_holiday_data_failure">节假日数据更新失败：%1$s</string>
     <string name="import_holiday_data_title">导入节假日 JSON</string>
     <string name="import_holiday_data_summary">从 JSON 文件导入法定节假日和调休上班日数据</string>
+    <!-- Compatibility alias for builds that use the JSON-specific preference resource name. -->
+    <string name="import_holiday_json_summary">从 JSON 文件导入法定节假日和调休上班日数据</string>
 </resources>

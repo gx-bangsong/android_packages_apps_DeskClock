@@ -198,7 +198,7 @@
         <Preference
             android:key="import_holiday_data"
             android:title="@string/import_holiday_data_title"
-            android:summary="@string/import_holiday_data_summary"
+            android:summary="@string/import_holiday_json_summary"
             app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
