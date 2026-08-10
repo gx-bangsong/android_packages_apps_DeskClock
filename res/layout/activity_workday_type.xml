@@ -29,6 +29,7 @@
         android:layout_height="?attr/actionBarSize"
         android:background="?attr/colorSurface"
         android:navigationContentDescription="@string/workday_type_back"
+        app:elevation="0dp"
         app:navigationIcon="@drawable/ic_arrow_back"
         app:navigationIconTint="?attr/colorOnSurface"
         app:title="@string/workday_type_title"
@@ -48,31 +49,18 @@
             android:layout_height="wrap_content"
             android:paddingBottom="24dp">
 
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/workday_type_card"
+            <LinearLayout
+                android:id="@+id/workday_type_list"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="8dp"
                 android:layout_marginEnd="16dp"
-                app:cardBackgroundColor="?attr/colorSurfaceVariant"
-                app:cardCornerRadius="28dp"
-                app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutline"
-                app:strokeWidth="1dp"
+                android:orientation="vertical"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintWidth_max="@dimen/workday_type_content_max_width">
-
-                <LinearLayout
-                    android:id="@+id/workday_type_list"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:divider="@drawable/workday_type_divider"
-                    android:orientation="vertical"
-                    android:showDividers="middle" />
-            </com.google.android.material.card.MaterialCardView>
+                app:layout_constraintWidth_max="@dimen/workday_type_content_max_width" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.core.widget.NestedScrollView>
