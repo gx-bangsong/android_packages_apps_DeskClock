@@ -24,48 +24,49 @@
     android:background="?attr/colorSurface"
     android:orientation="vertical">
 
-    <com.google.android.material.appbar.MaterialToolbar
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/shift_toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_height="wrap_content"
         android:background="?attr/colorSurface"
-        app:elevation="0dp">
+        android:minHeight="?attr/actionBarSize">
 
         <TextView
             android:id="@+id/shift_cancel"
             style="@style/WorkdayTypeToolbarAction"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
+            android:layout_width="80dp"
+            android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:gravity="center"
-            android:layout_gravity="start"
-            android:minWidth="64dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:text="@string/cancel" />
+            android:text="@string/cancel"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <TextView
             android:id="@+id/shift_title"
             style="@style/WorkdayTypeToolbarTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:layout_gravity="center"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="@string/shift_rotation" />
+            android:text="@string/shift_rotation"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/shift_done"
+            app:layout_constraintStart_toEndOf="@id/shift_cancel"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <TextView
             android:id="@+id/shift_done"
             style="@style/WorkdayTypeToolbarAction"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
+            android:layout_width="80dp"
+            android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:gravity="center"
-            android:layout_gravity="end"
-            android:minWidth="64dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:text="@string/done" />
-    </com.google.android.material.appbar.MaterialToolbar>
+            android:text="@string/done"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <androidx.core.widget.NestedScrollView
         android:id="@+id/shift_schedule_scroll"

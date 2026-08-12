@@ -33,7 +33,6 @@ import com.android.deskclock.EdgeToEdgeUtils;
 import com.android.deskclock.R;
 import com.android.deskclock.ThemeUtils;
 import com.android.deskclock.provider.Alarm;
-import com.google.android.material.appbar.MaterialToolbar;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,8 +100,8 @@ public final class WorkdayTypeActivity extends FragmentActivity {
                 ThemeUtils.resolveColor(this, R.attr.colorSurface));
         setContentView(R.layout.activity_workday_type);
 
-        final MaterialToolbar toolbar = findViewById(R.id.workday_type_toolbar);
-        toolbar.setNavigationOnClickListener(v -> finish());
+        final View toolbar = findViewById(R.id.workday_type_toolbar);
+        findViewById(R.id.workday_type_back).setOnClickListener(v -> finish());
         EdgeToEdgeUtils.applyHorizontalInsets(findViewById(android.R.id.content));
         EdgeToEdgeUtils.applyTopInsets(toolbar);
         EdgeToEdgeUtils.applyBottomInsets(findViewById(R.id.workday_type_scroll));
