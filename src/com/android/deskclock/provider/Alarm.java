@@ -509,10 +509,16 @@ public final class Alarm implements Parcelable, ClockContract.AlarmsColumns {
             nextInstanceTime.add(Calendar.DAY_OF_YEAR, 1);
         }
 
-        // The day of the week might be invalid, so find next valid one
-        final int addDays = daysOfWeek.getDistanceToNextDay(nextInstanceTime);
-        if (addDays > 0) {
-            nextInstanceTime.add(Calendar.DAY_OF_WEEK, addDays);
+        // Workday-aware alarms (anything but NONE/SHIFT) must not snap to the weekly
+        // repeat pattern here: make-up workdays are weekend days that usually are not part
+        // of the weekly pattern, so snapping first would skip them before WorkdayPolicy
+        // could approve them. WorkdayPolicy still honors the weekly pattern on ordinary days.
+        if (workdayType == WorkdayType.NONE || workdayType == WorkdayType.SHIFT) {
+            // The day of the week might be invalid, so find next valid one
+            final int addDays = daysOfWeek.getDistanceToNextDay(nextInstanceTime);
+            if (addDays > 0) {
+                nextInstanceTime.add(Calendar.DAY_OF_WEEK, addDays);
+            }
         }
 
         // Daylight Savings Time can alter the hours and minutes when adjusting the day above.
