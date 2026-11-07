@@ -14,7 +14,7 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix ".dev"
+            applicationIdSuffix ".gkcitest"
         }
         release {
             minifyEnabled true
