@@ -26,7 +26,8 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # A release build with the Gradle cache should finish well within this. The limit stops a hung job from holding the concurrency group.
+    # A release build with the Gradle cache should finish well within this. The limit stops a
+    # hung job from holding the concurrency group.
     timeout-minutes: 60
     env:
       # Keep the release gate on the build-tools this workflow installs; hosted images also
