@@ -2,6 +2,54 @@ plugins {
     id("com.android.application") version "8.13.2" apply true
 }
 
+// ---------------------------------------------------------------------------
+// Release versioning and signing (see docs/WORKFLOW.md).
+//
+// versionCode is the number of commits in the checked-out history; it only
+// grows, so every release is newer than the last. A shallow clone undercounts,
+// so a release build refuses to start from one (taskGraph check below).
+// versionName is yyyyMMdd.<versionCode>; the VERSION_NAME environment
+// variable overrides it. Without git (a source archive) the build uses 1.
+//
+// Release signing comes only from environment variables
+// (KEYSTORE_FILE/KEYSTORE_PASS/KEY_ALIAS/KEY_PASS), so ~/.gradle/gradle
+// .properties is never read and a developer's local key cannot be used by CI
+// by accident.
+// ---------------------------------------------------------------------------
+
+// CI runners set CI=true; scripts/ci-build.sh enforces it for release builds.
+def isCi = System.getenv("CI") == "true"
+
+// Runs git in the repository root. Returns trimmed stdout, or null when git fails.
+String runGit(String... args) {
+    try {
+        final def process = new ProcessBuilder((["git"] + args.toList()))
+                .directory(rootDir)
+                .redirectErrorStream(true)
+                .start()
+        final def out = process.inputStream.text.trim()
+        return process.waitFor() == 0 ? out : null
+    } catch (Exception ignored) {
+        return null
+    }
+}
+
+def isShallowClone = runGit("rev-parse", "--is-shallow-repository") == "true"
+def commitCountText = runGit("rev-list", "--count", "HEAD")
+def appVersionCode = commitCountText != null && commitCountText.isInteger()
+        && commitCountText.toInteger() > 0 ? commitCountText.toInteger() : 1
+def versionNameOverride = System.getenv("VERSION_NAME")?.trim()
+def appVersionName = versionNameOverride ?: java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+        .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + "." + appVersionCode
+
+def releaseKeystorePath = System.getenv("KEYSTORE_FILE")?.trim()
+def releaseKeystore = releaseKeystorePath ? new File(releaseKeystorePath) : null
+def releaseStorePassword = System.getenv("KEYSTORE_PASS")
+def releaseKeyAlias = System.getenv("KEY_ALIAS")
+def releaseKeyPassword = System.getenv("KEY_PASS")
+def releaseSigningReady = (releaseKeystore != null && releaseKeystore.isFile()
+        && releaseStorePassword && releaseKeyAlias && releaseKeyPassword) as boolean
+
 android {
     namespace 'com.android.deskclock'
     compileSdk 36
@@ -10,6 +58,19 @@ android {
         applicationId "com.android.deskclock"
         minSdkVersion 27
         targetSdkVersion 34
+        versionCode appVersionCode
+        versionName appVersionName
+    }
+
+    if (releaseSigningReady) {
+        signingConfigs {
+            release {
+                storeFile releaseKeystore
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -19,6 +80,11 @@ android {
         release {
             minifyEnabled true
             proguardFiles 'proguard.flags'
+            debuggable false
+            // Release key when the environment provides it. Otherwise the debug key, for
+            // local builds only: CI refuses to build a release without the release key
+            // (taskGraph check below).
+            signingConfig releaseSigningReady ? signingConfigs.release : signingConfigs.debug
         }
     }
 
@@ -61,6 +127,33 @@ dependencies {
     implementation 'androidx.test:core:1.5.0'
     implementation 'androidx.test:rules:1.5.0'
     testImplementation 'junit:junit:4.13.2'
+}
+
+// A release build must never be signed with the debug key in CI. Locally it falls back to the
+// debug key with a warning, so development builds keep working without the release secrets.
+// Only tasks that produce or sign a release package count; test tasks such as
+// testReleaseUnitTest do not, so `./gradlew test` is not affected.
+gradle.taskGraph.whenReady { graph ->
+    def packagesRelease = graph.allTasks.any { task ->
+        task.name.contains("Release") &&
+                ["assemble", "bundle", "package", "validateSigning", "install"]
+                        .any { task.name.startsWith(it) }
+    }
+    if (packagesRelease) {
+        if (isCi && isShallowClone) {
+            throw new GradleException(
+                    "Release build refused: versionCode needs full git history (fetch-depth: 0).")
+        }
+        if (!releaseSigningReady) {
+            def missing = "KEYSTORE_FILE (existing file), KEYSTORE_PASS, KEY_ALIAS, KEY_PASS"
+            if (isCi) {
+                throw new GradleException(
+                        "Release build refused: signing environment incomplete. Need: $missing")
+            }
+            logger.warn("WARNING: release signing environment incomplete ($missing). " +
+                    "Local release build is signed with the DEBUG key. Do not distribute it.")
+        }
+    }
 }
 
 tasks.withType(JavaCompile) {
