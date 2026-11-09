@@ -33,16 +33,29 @@ Documentation-only pushes (`docs/**`, `**.md`) do not publish.
 Release signing is read **only** from environment variables, never from
 `~/.gradle/gradle.properties` or any file in the repository:
 
-| Variable        | Meaning                                     |
-|-----------------|---------------------------------------------|
-| `KEYSTORE_FILE` | path to the keystore (CI decodes the secret to a temp file) |
-| `KEYSTORE_PASS` | keystore password                           |
-| `KEY_ALIAS`     | key alias                                   |
-| `KEY_PASS`      | key password                                |
+| Variable          | Meaning                                             |
+|-------------------|-----------------------------------------------------|
+| `KEYSTORE_BASE64` | base64-encoded keystore contents (used by CI)      |
+| `KEYSTORE_PASS`   | keystore password                                   |
+| `KEY_ALIAS`       | key alias                                           |
+| `KEY_PASS`        | key password                                        |
 
-- **CI**: `scripts/ci-build.sh` fails immediately when `KEYSTORE_BASE64`, `KEYSTORE_PASS`,
-  `KEY_ALIAS`, or `KEY_PASS` is missing; `build.gradle` additionally refuses any release
-  packaging task without a complete signing environment. A release is never silently skipped.
+Local Gradle builds use `KEYSTORE_FILE=/path/to/release.jks` as a keystore path. The GitHub
+Actions release workflow does **not** read a keystore path from secrets; it decodes
+`KEYSTORE_BASE64` into a private temporary file and points Gradle at it.
+
+- **GitHub Actions compatibility fallback**: the release workflow uses
+  `secrets.KEYSTORE_BASE64` when it is set; if it is empty, it falls back to
+  `secrets.KEYSTORE_FILE`, still treating that secret as base64 keystore contents. This keeps
+  repositories that stored the base64 keystore under the misleading `KEYSTORE_FILE` name
+  working without a secret rename. Creating a properly named `KEYSTORE_BASE64` secret remains
+  recommended; the fallback is for compatibility.
+
+- **CI**: `scripts/ci-build.sh` fails immediately when the effective `KEYSTORE_BASE64`,
+  `KEYSTORE_PASS`, `KEY_ALIAS`, or `KEY_PASS` is missing; `build.gradle` additionally refuses
+  any release packaging task without a complete signing environment. The workflow supplies the
+  effective `KEYSTORE_BASE64` from `secrets.KEYSTORE_BASE64`, falling back to
+  `secrets.KEYSTORE_FILE` (base64 contents) when needed. A release is never silently skipped.
 - **Local**: `./gradlew assembleRelease` without the signing environment falls back to the
   **debug key** and prints a prominent warning ("Do not distribute it"). `assembleDebug` is
   never affected.
@@ -74,6 +87,9 @@ Release signing is read **only** from environment variables, never from
 2. **Add four repository secrets** (Settings → Secrets and variables → Actions):
    `KEYSTORE_BASE64` (contents of `release.jks.b64`), `KEYSTORE_PASS`, `KEY_ALIAS`
    (`gkui-release` in the command above), `KEY_PASS`.
+   If a base64 keystore was previously stored as `KEYSTORE_FILE`, the release workflow falls
+   back to it for compatibility, but you should create `KEYSTORE_BASE64` and leave the fallback
+   unused.
 3. **Check `release-signer.sha256`** in the repository root. It currently contains the GKUI
    release-key fingerprint used by GKUICalculator and GKUICalendar:
    `2eaa964c9eae1ee70e131a6ca5f8f06d7c1c152a037cac33d01f585c758f214a`.

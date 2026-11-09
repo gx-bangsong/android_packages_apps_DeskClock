@@ -58,13 +58,15 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0"
 
       # All release logic is in the script: decode the keystore, build, gate, write dist/. The
-      # four secrets are passed as environment variables, never as command-line arguments, so
-      # they do not show in process lists. GH_TOKEN lets the script read the previous release.
+      # signing secrets are passed as environment variables, never as command-line arguments, so
+      # they do not show in process lists. For compatibility, KEYSTORE_BASE64 falls back to the
+      # KEYSTORE_FILE secret when KEYSTORE_BASE64 is empty; despite its name, that secret must
+      # then contain the base64 keystore. GH_TOKEN lets the script read the previous release.
       # GitHub runners set CI=true, which ci-build.sh and build.gradle require.
       - name: Build, check and prepare release files
         id: build
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || secrets.KEYSTORE_FILE }}
           KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASS: ${{ secrets.KEY_PASS }}
