@@ -13,7 +13,17 @@ runs:
 
     - name: Build with Gradle
       shell: bash
-      run: ./gradlew assembleDebug
+      run: |
+        ./gradlew assembleDebug > gradle-build.log 2>&1
+        status=$?
+        if [ "$status" -ne 0 ]; then
+          cat gradle-build.log
+          echo "=== gradle failure surfaced as annotations ==="
+          grep -E -m 20 'FAILURE:|What went wrong|Caused by:|error:|\.gradle:[0-9]+' gradle-build.log | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
+        fi
+        exit $status
 
     - uses: actions/upload-artifact@v7
       with:
