@@ -51,14 +51,27 @@ for command in base64 find git gh jq sha256sum; do
     require_command "$command"
 done
 
-# Locates a build-tools binary. Prefers PATH, then the newest build-tools under the SDK.
+# Locates a build-tools binary. If the workflow pins PINNED_BUILD_TOOLS_VERSION, use that
+# exact build-tools directory so newer preinstalled SDKs cannot change gate behavior; otherwise
+# prefer PATH, then the newest build-tools under the SDK.
 find_build_tool() {
     local name="$1"
+    local sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+    if [[ -n "${PINNED_BUILD_TOOLS_VERSION:-}" ]]; then
+        if [[ -z "${sdk}" ]]; then
+            die "ANDROID_HOME is not set; cannot find pinned ${name}"
+        fi
+        local pinned="${sdk}/build-tools/${PINNED_BUILD_TOOLS_VERSION}/${name}"
+        if [[ ! -x "${pinned}" ]]; then
+            die "pinned ${name} not found at ${pinned}; install build-tools;${PINNED_BUILD_TOOLS_VERSION}"
+        fi
+        echo "${pinned}"
+        return
+    fi
     if command -v "${name}" >/dev/null 2>&1; then
         command -v "${name}"
         return
     fi
-    local sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
     if [[ -z "${sdk}" ]]; then
         die "ANDROID_HOME is not set; cannot find ${name}"
     fi
@@ -188,15 +201,24 @@ main() {
     log "applicationId=${app_id} versionCode=${version_code} versionName=${version_name}"
 
     # --- Gate 2: signing certificate -------------------------------------------------------
-    local signer_out signer_count fingerprint expected
+    local signer_out signer_count fingerprint expected signer_digests
     if ! signer_out="$("${apksigner}" verify --print-certs "${APK_IN}")"; then
         die "apksigner verify failed: the APK is not correctly signed"
     fi
-    signer_count="$(grep -c '^Signer #[0-9]* certificate SHA-256 digest:' <<<"${signer_out}" || true)"
-    if [[ "${signer_count}" != "1" ]]; then
-        die "expected exactly one signer, found ${signer_count}"
+    # build-tools 37 renamed the signer lines (for example, "V2 Signer: certificate SHA-256 digest:").
+    # Accept any prefix before "certificate SHA-256 digest:", normalize each digest, and count
+    # distinct certificates. One key under multiple signature schemes is still one signer.
+    signer_digests="$(printf '%s\n' "${signer_out}" | sed -n 's/.*certificate SHA-256 digest:[[:space:]]*//p' | tr -d ' :\r' | tr 'A-F' 'a-f' | grep -E '^[0-9a-f]{64}$' | sort -u || true)"
+    signer_count="$(printf '%s\n' "${signer_digests}" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+    if [[ "${signer_count}" == "0" ]]; then
+        printf '%s\n' "${signer_out}" >&2
+        die "could not read any certificate SHA-256 digest from apksigner output"
     fi
-    fingerprint="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"${signer_out}" | normalise_fingerprint)"
+    if [[ "${signer_count}" != "1" ]]; then
+        printf '%s\n' "${signer_out}" >&2
+        die "expected exactly one signer, found ${signer_count} distinct certificate(s)"
+    fi
+    fingerprint="$(sed -n '1p' <<<"${signer_digests}")"
     if [[ ! "${fingerprint}" =~ ^[0-9a-f]{64}$ ]]; then
         die "could not read the signer SHA-256 from apksigner output"
     fi
