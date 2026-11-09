@@ -26,9 +26,12 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # A release build with the Gradle cache should finish well within this. The limit stops a
-    # hung job from holding the concurrency group.
+    # A release build with the Gradle cache should finish well within this. The limit stops a hung job from holding the concurrency group.
     timeout-minutes: 60
+    env:
+      # Keep the release gate on the build-tools this workflow installs; hosted images also
+      # carry newer build-tools whose tool output can change.
+      PINNED_BUILD_TOOLS_VERSION: "36.0.0"
     steps:
       # Full history, not the default depth 1: versionCode is the commit count, and a shallow
       # clone would give a smaller number. A shallow clone is rejected by Gradle and by the
@@ -55,7 +58,7 @@ jobs:
           # Accept the SDK licences if they are not accepted yet. Failing here is not fatal:
           # the install below reports any real problem.
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;${PINNED_BUILD_TOOLS_VERSION}"
 
       # All release logic is in the script: decode the keystore, build, gate, write dist/. The
       # signing secrets are passed as environment variables, never as command-line arguments, so
