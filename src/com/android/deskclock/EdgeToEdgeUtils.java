@@ -77,6 +77,11 @@ public final class EdgeToEdgeUtils {
      */
     public static void applyInsets(View root, boolean applyTop, boolean applyBottom,
             boolean applyHorizontal) {
+        applyInsets(root, applyTop, applyBottom, applyHorizontal, false /* consume */);
+    }
+
+    private static void applyInsets(View root, boolean applyTop, boolean applyBottom,
+            boolean applyHorizontal, boolean consume) {
         if (root == null) {
             return;
         }
@@ -93,7 +98,7 @@ public final class EdgeToEdgeUtils {
                     initialTop + (applyTop ? bars.top : 0),
                     initialRight + (applyHorizontal ? bars.right : 0),
                     initialBottom + (applyBottom ? bars.bottom : 0));
-            return insets;
+            return consume ? WindowInsetsCompat.CONSUMED : insets;
         });
         ViewCompat.requestApplyInsets(root);
     }
@@ -104,6 +109,19 @@ public final class EdgeToEdgeUtils {
 
     public static void applyBottomInsets(View root) {
         applyInsets(root, false, true, false);
+    }
+
+    /**
+     * Applies the bottom inset and consumes the dispatched insets so they do not propagate to
+     * descendants. Material's BottomNavigationView adds the system window bottom inset to its
+     * own padding to dodge the navigation bar; when a container already applies that inset,
+     * the descendant must not receive it again or the content is lifted twice and a dead zone
+     * appears between the bar and the navigation bar.
+     *
+     * @param root the view receiving the bottom inset; its descendants receive consumed insets
+     */
+    public static void applyBottomInsetsAndConsume(View root) {
+        applyInsets(root, false, true, false, true /* consume */);
     }
 
     public static void applyHorizontalInsets(View root) {

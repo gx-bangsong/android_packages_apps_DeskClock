@@ -54,9 +54,12 @@ public abstract class BaseActivity extends AppCompatActivity {
             // Keep the navigation bar background immersive, but move the navigation items above
             // the gesture area. The inset belongs to the background-bearing container, not the
             // navigation view itself, so the gesture area is painted with the same surface color.
+            // The insets are consumed here: Material's BottomNavigationView pads itself with the
+            // navigation-bar inset when it receives one, which would lift the tab row twice and
+            // leave a dead zone between the bar and the system navigation bar.
             EdgeToEdgeUtils.applyHorizontalInsets(root);
             EdgeToEdgeUtils.applyTopInsets(appBar);
-            EdgeToEdgeUtils.applyBottomInsets(bottomBarContainer);
+            EdgeToEdgeUtils.applyBottomInsetsAndConsume(bottomBarContainer);
             EdgeToEdgeUtils.setSystemBarColors(getWindow(),
                     ThemeUtils.resolveColor(this, android.R.attr.windowBackground),
                     ThemeUtils.resolveColor(this, R.attr.colorSurfaceVariant));
