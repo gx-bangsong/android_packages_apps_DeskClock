@@ -23,11 +23,11 @@ def isCi = System.getenv("CI") == "true"
 // Runs git in the repository root. Returns trimmed stdout, or null when git fails.
 String runGit(String... args) {
     try {
-        final def process = new ProcessBuilder((["git"] + args.toList()))
-                .directory(rootDir)
-                .redirectErrorStream(true)
-                .start()
-        final def out = process.inputStream.text.trim()
+        def pb = new ProcessBuilder(["git"] + args.toList())
+        pb.directory(rootDir)
+        pb.redirectErrorStream(true)
+        def process = pb.start()
+        def out = process.inputStream.text.trim()
         return process.waitFor() == 0 ? out : null
     } catch (Exception ignored) {
         return null
@@ -36,19 +36,32 @@ String runGit(String... args) {
 
 def isShallowClone = runGit("rev-parse", "--is-shallow-repository") == "true"
 def commitCountText = runGit("rev-list", "--count", "HEAD")
-def appVersionCode = commitCountText != null && commitCountText.isInteger()
-        && commitCountText.toInteger() > 0 ? commitCountText.toInteger() : 1
+int appVersionCode = 1
+if (commitCountText != null && commitCountText.isInteger()) {
+    def commitCount = commitCountText.toInteger()
+    if (commitCount > 0) {
+        appVersionCode = commitCount
+    }
+}
+
 def versionNameOverride = System.getenv("VERSION_NAME")?.trim()
-def appVersionName = versionNameOverride ?: java.time.LocalDate.now(java.time.ZoneOffset.UTC)
-        .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + "." + appVersionCode
+def appVersionName
+if (versionNameOverride) {
+    appVersionName = versionNameOverride
+} else {
+    def buildDate = java.time.LocalDate.now(java.time.ZoneOffset.UTC).format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"))
+    appVersionName = buildDate + "." + appVersionCode
+}
 
 def releaseKeystorePath = System.getenv("KEYSTORE_FILE")?.trim()
 def releaseKeystore = releaseKeystorePath ? new File(releaseKeystorePath) : null
 def releaseStorePassword = System.getenv("KEYSTORE_PASS")
 def releaseKeyAlias = System.getenv("KEY_ALIAS")
 def releaseKeyPassword = System.getenv("KEY_PASS")
-def releaseSigningReady = (releaseKeystore != null && releaseKeystore.isFile()
-        && releaseStorePassword && releaseKeyAlias && releaseKeyPassword) as boolean
+boolean hasStorePass = releaseStorePassword != null && !releaseStorePassword.isEmpty()
+boolean hasKeyAlias = releaseKeyAlias != null && !releaseKeyAlias.isEmpty()
+boolean hasKeyPass = releaseKeyPassword != null && !releaseKeyPassword.isEmpty()
+boolean releaseSigningReady = releaseKeystore != null && releaseKeystore.isFile() && hasStorePass && hasKeyAlias && hasKeyPass
 
 android {
     namespace 'com.android.deskclock'
@@ -134,24 +147,20 @@ dependencies {
 // Only tasks that produce or sign a release package count; test tasks such as
 // testReleaseUnitTest do not, so `./gradlew test` is not affected.
 gradle.taskGraph.whenReady { graph ->
+    def releaseTaskPrefixes = ["assemble", "bundle", "package", "validateSigning", "install"]
     def packagesRelease = graph.allTasks.any { task ->
-        task.name.contains("Release") &&
-                ["assemble", "bundle", "package", "validateSigning", "install"]
-                        .any { task.name.startsWith(it) }
+        task.name.contains("Release") && releaseTaskPrefixes.any { task.name.startsWith(it) }
     }
     if (packagesRelease) {
         if (isCi && isShallowClone) {
-            throw new GradleException(
-                    "Release build refused: versionCode needs full git history (fetch-depth: 0).")
+            throw new GradleException("Release build refused: versionCode needs full git history (fetch-depth: 0).")
         }
         if (!releaseSigningReady) {
             def missing = "KEYSTORE_FILE (existing file), KEYSTORE_PASS, KEY_ALIAS, KEY_PASS"
             if (isCi) {
-                throw new GradleException(
-                        "Release build refused: signing environment incomplete. Need: $missing")
+                throw new GradleException("Release build refused: signing environment incomplete. Need: " + missing)
             }
-            logger.warn("WARNING: release signing environment incomplete ($missing). " +
-                    "Local release build is signed with the DEBUG key. Do not distribute it.")
+            logger.warn("WARNING: release signing environment incomplete (" + missing + "). Local release build is signed with the DEBUG key. Do not distribute it.")
         }
     }
 }
