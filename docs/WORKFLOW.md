@@ -19,12 +19,22 @@ Documentation-only pushes (`docs/**`, `**.md`) do not publish.
 
 ### Version scheme
 
-- `versionCode` = `git rev-list --count HEAD` — the commit count. It only grows, so every
-  release is newer than the last. This needs the full history: the workflow checks out with
-  `fetch-depth: 0`, and both `build.gradle` and `ci-build.sh` **refuse to build a release from
-  a shallow clone**.
-- `versionName` = `yyyyMMdd.<versionCode>` (UTC), for example `20260927.1523`. The
+- `versionCode` = `VERSION_CODE_BASE` + `git rev-list --count HEAD`. The default base is
+  `1144400000`, chosen so release builds of `com.android.deskclock` outrank vendor builds of
+  the same package in version comparisons — Xiaomi's clock reports versionCode `1144400000`,
+  and updater apps that catalogue it stop considering ours older. The commit count added on
+  top only grows, so every release is newer than the last. Set the `VERSION_CODE_BASE`
+  environment variable to override the base (`0` gives the raw commit count); the value must
+  keep `base + commit count` within the 32-bit int limit (`2147483647`).
+- `versionName` = `yyyyMMdd.<commit count>` (UTC), for example `20261109.11444` — the short
+  commit count, **not** the based versionCode, so tags and file names stay compact. The
   `VERSION_NAME` environment variable overrides it when a custom name is needed.
+- Raising the base later is a one-line change in `build.gradle`. Lowering or removing it after
+  a based release has shipped is a **downgrade** for installed devices: Android refuses to
+  install a smaller versionCode over a larger one (uninstall first, losing data, or
+  `adb install -d`).
+- This needs the full history: the workflow checks out with `fetch-depth: 0`, and both
+  `build.gradle` and `ci-build.sh` **refuse to build a release from a shallow clone**.
 - No version value is ever written back into the repository; everything is computed at build
   time. `ci-build.sh` fails the release if the build changed any tracked file.
 
