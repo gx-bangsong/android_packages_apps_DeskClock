@@ -5,10 +5,14 @@ plugins {
 // ---------------------------------------------------------------------------
 // Release versioning and signing (see docs/WORKFLOW.md).
 //
-// versionCode is the number of commits in the checked-out history; it only
-// grows, so every release is newer than the last. A shallow clone undercounts,
-// so a release build refuses to start from one (taskGraph check below).
-// versionName is yyyyMMdd.<versionCode>; the VERSION_NAME environment
+// versionCode is a fixed base plus the number of commits in the checked-out
+// history. The base makes release builds outrank vendor builds of the same
+// applicationId in version comparisons (Xiaomi's clock reports versionCode
+// 1144400000); the commit count added on top only grows, so every release is
+// newer than the last. The VERSION_CODE_BASE environment variable overrides
+// the base (0 gives the raw commit count). A shallow clone undercounts, so a
+// release build refuses to start from one (taskGraph check below).
+// versionName is yyyyMMdd.<commit count>; the VERSION_NAME environment
 // variable overrides it. Without git (a source archive) the build uses 1.
 //
 // Release signing comes only from environment variables
@@ -53,6 +57,24 @@ if (versionNameOverride) {
     appVersionName = buildDate + "." + appVersionCode
 }
 
+// versionCode carries a fixed base so release builds of com.android.deskclock outrank
+// vendor builds of the same package in any version comparison (Xiaomi's clock reports
+// 1144400000). The commit count is added on top and keeps the value monotonically
+// increasing. Override with the VERSION_CODE_BASE environment variable; set it to 0
+// for the raw commit count.
+def versionCodeBaseText = System.getenv("VERSION_CODE_BASE")?.trim()
+long versionCodeBase = 1144400000L
+if (versionCodeBaseText != null && versionCodeBaseText.isLong()) {
+    versionCodeBase = versionCodeBaseText.toLong()
+}
+if (versionCodeBase < 0L) {
+    throw new GradleException("VERSION_CODE_BASE must not be negative: " + versionCodeBase)
+}
+long versionCodeValue = versionCodeBase + (long) appVersionCode
+if (versionCodeValue < 1L || versionCodeValue > 2147483647L) {
+    throw new GradleException("versionCode out of int range: " + versionCodeValue)
+}
+
 def releaseKeystorePath = System.getenv("KEYSTORE_FILE")?.trim()
 def releaseKeystore = releaseKeystorePath ? new File(releaseKeystorePath) : null
 def releaseStorePassword = System.getenv("KEYSTORE_PASS")
@@ -71,7 +93,7 @@ android {
         applicationId "com.android.deskclock"
         minSdkVersion 27
         targetSdkVersion 34
-        versionCode appVersionCode
+        versionCode Math.toIntExact(versionCodeValue)
         versionName appVersionName
     }
 
