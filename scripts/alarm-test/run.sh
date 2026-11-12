@@ -329,6 +329,9 @@ scenario_a() {
 # then inject the alarm row (plus optional holiday rows) while the database is cold.
 prepare_alarm_db() {
     clear_app
+    # pm clear revokes runtime permissions; grant it back so the POST_NOTIFICATIONS
+    # dialog can never cover the UI during the scenario.
+    adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
     sleep 2
     wake
     launch_app
