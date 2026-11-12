@@ -15,12 +15,12 @@
 #      and the weekly pattern EXCLUDES today         -> must FIRE (comp day = workday)
 #
 # Alarm creation: every scenario inserts the alarm row directly into the app database
-# (via run-as on the debuggable build) and toggles the alarm on through the real UI
-# switch, which runs the production asyncUpdateAlarm -> scheduling path. The public
-# SET_ALARM intent is deliberately not used: with the stock sample alarms present it
-# just enables the first one at ITS default time (no search extras = match-all), so it
-# cannot place an alarm at a controlled time. Annotations carry all failure evidence
-# because workflow log downloads may be blocked from restricted networks.
+# (via run-as on the debuggable build, device-protected storage) and then enables it
+# through the public SET_ALARM intent carrying exactly the injected hour/minute/days.
+# HandleApiCalls matches that selection, enables the alarm at its database time (the
+# workday type stays intact) and registers the instance - the production scheduling
+# path, with no uiautomator dependency (dumps came back empty on aosp_atd). Only
+# scenario C touches the UI (the settings "Update holiday data" preference).
 
 set -uo pipefail
 
@@ -54,6 +54,10 @@ crash_report() {
 
 logcat_app_tail() {
     adb logcat -d 2>/dev/null | grep -iE "deskclock|AlarmStateManager|AlarmService|AlarmKlaxon|HandleApiCalls|WorkdayAlarmScheduler|HolidayRepository|AlarmUpdateHandler" | tail -n 15 | tr '\n' '|' | cut -c1-700
+}
+
+window_focus() {
+    adb shell dumpsys window windows 2>/dev/null | tr -d '\r' | grep -E 'mCurrentFocus|mFocusedApp' | head -n 2 | tr '\n' '|' | cut -c1-250
 }
 
 ui_texts_summary() {
@@ -174,18 +178,38 @@ VALUES ($h, $m, $bits, 0, 1, 'alarm-test', 'content://settings/system/alarm_soun
         0, 0, $type, 7, '', 0, '', '');"
 }
 
-# Launches the app and turns the (single) alarm on through the real UI; the toggle runs
-# the production asyncUpdateAlarm path that creates and registers the instance.
-toggle_alarm_on_via_ui() {
-    launch_app
-    sleep 4
-    if ! ui exists --rid onoff --timeout 15; then
-        annotate_error "alarm on/off switch not found; UI now: $(ui_texts_summary)"
+# Enable the single injected alarm through the public SET_ALARM intent.
+# setSelectionFromIntent matches on hour AND minutes AND daysofweek, so an intent
+# carrying exactly the injected alarm's values hits the update branch: it enables
+# the alarm at ITS database time (workday type intact) and schedules the instance.
+# A uiautomator-driven UI switch is deliberately not used: uiautomator dumps came
+# back empty on the aosp_atd image.
+toggle_alarm_on() { # <hour> <minute> <calendar-days-csv or "">
+    local h="$1" m="$2" days="$3" out
+    h=$((10#$h))
+    m=$((10#$m))
+    local args=(shell am start -a android.intent.action.SET_ALARM
+        --ei android.provider.AlarmClock.EXTRA_HOUR "$h"
+        --ei android.provider.AlarmClock.EXTRA_MINUTES "$m"
+        --ez android.provider.AlarmClock.EXTRA_SKIP_UI true)
+    if [ -n "$days" ]; then
+        args+=(--eia android.provider.AlarmClock.EXTRA_DAYS "$days")
+    fi
+    out="$(adb "${args[@]}" 2>&1 | tr '\r\n' '  ')"
+    if ! printf '%s' "$out" | grep -q 'Starting:'; then
+        annotate_error "SET_ALARM toggle failed: ${out:0:400}"
         crash_report
         return 1
     fi
-    ui tap --rid onoff --timeout 15 || return 1
-    sleep 5
+    if adb logcat -d 2>/dev/null | grep -q 'Created new alarm'; then
+        annotate_error "SET_ALARM matched nothing and CREATED a new alarm (selection mismatch); am: ${out:0:300}"
+        return 1
+    fi
+    if ! logcat_wait_for 'Updated alarm' 45; then
+        annotate_error "alarm not updated by SET_ALARM; app logcat: $(logcat_app_tail)"
+        crash_report
+        return 1
+    fi
     return 0
 }
 
@@ -225,20 +249,11 @@ XML
 }
 
 update_holiday_data_via_ui() {
-    launch_app
+    # The debug build is debuggable, so the shell may start the unexported activity.
+    adb shell am start -n "$PKG/com.android.deskclock.settings.SettingsActivity" >/dev/null 2>&1
     sleep 4
-    ui tap --desc "Settings" --timeout 8 --no-scroll || {
-        ui tap --desc "More options" --timeout 15 || {
-            annotate_error "overflow menu not found; UI now: $(ui_texts_summary)"
-            return 1
-        }
-        ui tap --text "Settings" --timeout 15 || {
-            annotate_error "Settings menu item not found; UI now: $(ui_texts_summary)"
-            return 1
-        }
-    }
     ui tap --text "Update holiday data" --timeout 30 || {
-        annotate_error "Update holiday data preference not found; UI now: $(ui_texts_summary)"
+        annotate_error "Update holiday data preference not found; focus: $(window_focus); UI now: $(ui_texts_summary)"
         return 1
     }
     logcat_wait_for 'Holiday data updated' 60
@@ -258,8 +273,8 @@ scenario_a() {
         snapshot scenario-a
         return
     }
-    toggle_alarm_on_via_ui || {
-        fail_scenario "A plain alarm" "UI toggle failed"
+    toggle_alarm_on "$h" "$m" "" || {
+        fail_scenario "A plain alarm" "enable through SET_ALARM intent failed"
         snapshot scenario-a
         return
     }
@@ -304,8 +319,8 @@ scenario_b() {
         snapshot scenario-b
         return
     }
-    toggle_alarm_on_via_ui || {
-        fail_scenario "B statutory+empty" "UI toggle failed"
+    toggle_alarm_on "$h" "$m" "1,2,3,4,5,6,7" || {
+        fail_scenario "B statutory+empty" "enable through SET_ALARM intent failed"
         snapshot scenario-b
         return
     }
@@ -352,8 +367,8 @@ JSON
     fi
     adb shell input keyevent BACK >/dev/null 2>&1
     sleep 2
-    toggle_alarm_on_via_ui || {
-        fail_scenario "C third-party source" "UI toggle failed"
+    toggle_alarm_on "$h" "$m" "1,2,3,4,5,6,7" || {
+        fail_scenario "C third-party source" "enable through SET_ALARM intent failed"
         snapshot scenario-c
         return
     }
@@ -386,8 +401,8 @@ scenario_d() {
         snapshot scenario-d
         return
     }
-    toggle_alarm_on_via_ui || {
-        fail_scenario "D legal holiday" "UI toggle failed"
+    toggle_alarm_on "$h" "$m" "1,2,3,4,5,6,7" || {
+        fail_scenario "D legal holiday" "enable through SET_ALARM intent failed"
         snapshot scenario-d
         return
     }
@@ -418,6 +433,10 @@ scenario_e() {
     # Weekly pattern covers every day EXCEPT today's weekday: only the make-up day
     # logic can make the alarm ring today.
     bits=$(( 127 - $(cal_to_bit "$cal_dow") ))
+    local days_csv="" d
+    for d in 1 2 3 4 5 6 7; do
+        [ "$d" -eq "$cal_dow" ] || days_csv="${days_csv:+$days_csv,}$d"
+    done
     # A holiday next week whose make-up workday is today.
     hol_start="$(dev_date_field $(( target + 5 * 86400 )) F)"
     hol_end="$(dev_date_field $(( target + 6 * 86400 )) F)"
@@ -427,8 +446,8 @@ scenario_e() {
         snapshot scenario-e
         return
     }
-    toggle_alarm_on_via_ui || {
-        fail_scenario "E make-up workday" "UI toggle failed"
+    toggle_alarm_on "$h" "$m" "$days_csv" || {
+        fail_scenario "E make-up workday" "enable through SET_ALARM intent failed"
         snapshot scenario-e
         return
     }

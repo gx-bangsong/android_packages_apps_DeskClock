@@ -39,8 +39,14 @@ def sh(*args, timeout=60):
 
 
 def dump_xml():
-    sh("adb", "shell", "uiautomator", "dump", "/sdcard/alarm-test-ui.xml")
-    return sh("adb", "exec-out", "cat", "/sdcard/alarm-test-ui.xml")
+    # /dev/tty avoids any dependency on emulated storage, which stripped test images
+    # (aosp_atd) may not provide; the tool prints a banner line before the XML.
+    out = sh("adb", "exec-out", "uiautomator", "dump", "/dev/tty")
+    idx = out.find("<?xml")
+    if idx >= 0:
+        return out[idx:]
+    sh("adb", "shell", "uiautomator", "dump", "/data/local/tmp/alarm-test-ui.xml")
+    return sh("adb", "exec-out", "cat", "/data/local/tmp/alarm-test-ui.xml")
 
 
 def find_nodes(xml, args):
