@@ -27,11 +27,32 @@ LOGS="$HERE/logs"
 mkdir -p "$FIXTURES" "$LOGS"
 
 RESULTS=()
+LAST_AM=""
 
 note() { echo "[alarm-test] $*"; }
 
-pass_scenario() { RESULTS+=("PASS $1"); note "PASS: $1"; }
-fail_scenario() { RESULTS+=("FAIL $1: $2"); note "FAIL: $1 - $2"; }
+annotate_error() { echo "::error::alarm-test: $*"; }
+
+# Annotations are the only output channel readable through the API from restricted
+# networks, so every failure path funnels its evidence into them.
+crash_report() {
+    local crashes
+    crashes="$(adb logcat -d 2>/dev/null | grep -E 'FATAL EXCEPTION|Process: com\.android\.deskclock' | head -n 6 | tr '\n' '|' | cut -c1-500)"
+    if [ -n "$crashes" ]; then
+        annotate_error "app crash detected: $crashes"
+    fi
+}
+
+logcat_deskclock_tail() {
+    adb logcat -d 2>/dev/null | grep -i "deskclock" | tail -n 15 | tr '\n' '|' | cut -c1-700
+}
+
+ui_texts_summary() {
+    python3 "$HERE/ui.py" texts 2>/dev/null | head -n 20 | tr '\n' '|' | cut -c1-600
+}
+
+pass_scenario() { RESULTS+=("PASS $1"); echo "::notice::alarm-test PASS: $1"; note "PASS: $1"; }
+fail_scenario() { RESULTS+=("FAIL $1: $2"); echo "::error::alarm-test FAIL: $1 - $2"; note "FAIL: $1 - $2"; }
 
 dev_epoch() { adb shell date +%s | tr -d '\r\n'; }
 dev_tz() { adb shell getprop persist.sys.timezone | tr -d '\r\n'; }
@@ -65,7 +86,21 @@ create_alarm() {
     if [ -n "$days" ]; then
         args+=(--eia android.provider.AlarmClock.EXTRA_DAYS "$days")
     fi
-    adb "${args[@]}" >/dev/null 2>&1
+    LAST_AM="$(adb "${args[@]}" 2>&1 | tr -d '\r')"
+    note "am start output: ${LAST_AM:0:300}"
+}
+
+# HandleApiCalls logs "Created new alarm" on success; without it the intent did not
+# produce an alarm and every later assertion is meaningless.
+verify_alarm_created() {
+    if logcat_wait_for 'Created new alarm' 45; then
+        note "alarm creation confirmed in logcat"
+        return 0
+    fi
+    annotate_error "alarm NOT created. am output: ${LAST_AM:0:400}"
+    annotate_error "deskclock logcat tail: $(logcat_deskclock_tail)"
+    crash_report
+    return 1
 }
 
 # Expand the (only) alarm, set workday type to "Statutory workdays". This exercises the
@@ -78,9 +113,19 @@ set_statutory_via_ui() {
         ui tap --contains "Alarm" --timeout 10 --no-scroll >/dev/null 2>&1 || true
         sleep 2
     fi
-    ui tap --rid arrow --timeout 30 || return 1
-    ui tap --text "Workday type" --timeout 25 || return 1
-    ui tap --text "Statutory workdays" --timeout 25 || return 1
+    if ! ui tap --rid arrow --timeout 30; then
+        annotate_error "alarm row expand (id/arrow) not found; UI now: $(ui_texts_summary)"
+        crash_report
+        return 1
+    fi
+    if ! ui tap --text "Workday type" --timeout 25; then
+        annotate_error "Workday type row not found after expand; UI now: $(ui_texts_summary)"
+        return 1
+    fi
+    if ! ui tap --text "Statutory workdays" --timeout 25; then
+        annotate_error "Statutory workdays option not found; UI now: $(ui_texts_summary)"
+        return 1
+    fi
     sleep 5
     return 0
 }
@@ -186,11 +231,18 @@ scenario_a() {
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
     create_alarm "$h" "$m" ""
+    if ! verify_alarm_created; then
+        fail_scenario "A plain alarm" "alarm was not created by the SET_ALARM intent"
+        snapshot scenario-a
+        return
+    fi
     adb logcat -c
     if wait_fired 300; then
         pass_scenario "A plain alarm fired"
     else
         fail_scenario "A plain alarm" "did not fire within window"
+        annotate_error "A no-fire; deskclock logcat: $(logcat_deskclock_tail)"
+        crash_report
     fi
     snapshot scenario-a
 }
@@ -205,6 +257,11 @@ scenario_b() {
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
     create_alarm "$h" "$m" "1,2,3,4,5,6,7"
+    if ! verify_alarm_created; then
+        fail_scenario "B statutory+empty" "alarm was not created by the SET_ALARM intent"
+        snapshot scenario-b
+        return
+    fi
     if ! set_statutory_via_ui; then
         fail_scenario "B statutory+empty" "UI automation failed"
         snapshot scenario-b
@@ -215,6 +272,8 @@ scenario_b() {
         pass_scenario "B statutory type with empty dataset fired"
     else
         fail_scenario "B statutory+empty dataset" "did not fire; an empty dataset must never suppress alarms"
+        annotate_error "B no-fire; deskclock logcat: $(logcat_deskclock_tail)"
+        crash_report
     fi
     snapshot scenario-b
 }
@@ -236,8 +295,14 @@ JSON
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
     create_alarm "$h" "$m" "1,2,3,4,5,6,7"
+    if ! verify_alarm_created; then
+        fail_scenario "C third-party source" "alarm was not created by the SET_ALARM intent"
+        snapshot scenario-c
+        return
+    fi
     if ! update_holiday_data_via_ui; then
         fail_scenario "C third-party source" "data update through the UI failed"
+        annotate_error "C settings UI state: $(ui_texts_summary)"
         snapshot scenario-c
         return
     fi
@@ -253,6 +318,8 @@ JSON
         pass_scenario "C third-party data source loaded and alarm fired"
     else
         fail_scenario "C third-party source" "data loaded but alarm did not fire"
+        annotate_error "C no-fire; deskclock logcat: $(logcat_deskclock_tail)"
+        crash_report
     fi
     snapshot scenario-c
 }
@@ -278,6 +345,11 @@ scenario_d() {
     launch_app
     sleep 4
     create_alarm "$h" "$m" "1,2,3,4,5,6,7"
+    if ! verify_alarm_created; then
+        fail_scenario "D legal holiday" "alarm was not created by the SET_ALARM intent"
+        snapshot scenario-d
+        return
+    fi
     if ! set_statutory_via_ui; then
         fail_scenario "D legal holiday" "UI automation failed"
         snapshot scenario-d
@@ -327,6 +399,11 @@ scenario_e() {
     launch_app
     sleep 4
     create_alarm "$h" "$m" "$days"
+    if ! verify_alarm_created; then
+        fail_scenario "E make-up workday" "alarm was not created by the SET_ALARM intent"
+        snapshot scenario-e
+        return
+    fi
     if ! set_statutory_via_ui; then
         fail_scenario "E make-up workday" "UI automation failed"
         snapshot scenario-e
@@ -346,6 +423,21 @@ main() {
     if ! adb install -r "$APK"; then
         echo "::error::adb install failed"
         exit 1
+    fi
+    if ! adb shell pm list packages 2>/dev/null | tr -d '' | grep -q "$PKG"; then
+        annotate_error "package $PKG missing after install; installed packages mentioning deskclock:"
+        annotate_error "$(adb shell pm list packages 2>/dev/null | tr -d '' | grep -i deskclock | tr '
+' ' ')"
+        exit 1
+    fi
+    wake
+    launch_app
+    sleep 5
+    if [ -z "$(adb shell pidof "$PKG" 2>/dev/null | tr -d '
+')" ]; then
+        annotate_error "app process not running after launch; it may be crashing"
+        crash_report
+        annotate_error "deskclock logcat tail: $(logcat_deskclock_tail)"
     fi
     scenario_a
     scenario_b

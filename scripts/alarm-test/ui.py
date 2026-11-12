@@ -95,7 +95,7 @@ def wait_node(args):
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("tap", "exists"):
+    for name in ("tap", "exists", "texts"):
         p = sub.add_parser(name)
         p.add_argument("--text")
         p.add_argument("--contains")
@@ -109,6 +109,9 @@ def main():
     if all(v is None for v in selectors):
         print("error: choose a selector (--text/--contains/--rid/--desc)", file=sys.stderr)
         return 2
+
+    if args.command == "texts":
+        return cmd_texts(args)
 
     node = wait_node(args)
     if node is None:
@@ -127,3 +130,22 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def cmd_texts(args):
+    """Print visible texts for diagnostics (used on UI failures)."""
+    nodes = []
+    try:
+        root = ET.fromstring(dump_xml())
+        for node in root.iter("node"):
+            text = node.get("text") or ""
+            desc = node.get("content-desc") or ""
+            rid = node.get("resource-id") or ""
+            rid = rid.split("/")[-1]
+            if text or desc or rid:
+                nodes.append(f"{text!r}/{desc!r}/{rid}")
+    except ET.ParseError:
+        pass
+    for line in nodes[:30]:
+        print(line)
+    return 0
