@@ -257,33 +257,49 @@ XML
 }
 
 update_holiday_data_via_ui() {
-    # The settings activity is not exported, so it must be reached through the app:
-    # toolbar settings icon (fallback: overflow menu), then the update preference.
-    local probe i
+    # The settings activity is not exported and uiautomator dumps do not go idle on
+    # this app's own screens, so three ways to open settings are tried - uiautomator
+    # tap, a coordinate tap of the toolbar icon, d-pad - each verified through
+    # dumpsys before continuing. The preference itself is then reached by d-pad:
+    # "Update holiday data" is the second-to-last row, so overshooting DOWN clamps
+    # the focus on the last row and a single UP lands on the target.
+    local i
     launch_app
-    sleep 5
+    sleep 6
     # belt and braces: dismiss a permission dialog if one still showed up
-    ui tap --text "Allow" --timeout 8 --no-scroll 2>/dev/null
-    if ! ui tap --desc "Settings" --timeout 15 --no-scroll; then
-        if ui tap --desc "More options" --timeout 15 --no-scroll; then
-            ui tap --text "Settings" --timeout 15 || {
-                annotate_error "Settings menu item not found; UI now: $(ui_texts_summary)"
-                return 1
-            }
-        else
-            annotate_error "settings entry not found; UI now: $(ui_texts_summary)"
-            return 1
+    ui tap --text "Allow" --timeout 5 --no-scroll 2>/dev/null
+
+    in_settings() {
+        adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' | grep -q "settings.SettingsActivity"
+    }
+
+    if ! ui tap --desc "Settings" --timeout 10 --no-scroll; then
+        # coordinate tap of the toolbar settings icon (right edge, toolbar center)
+        local w dens pxdp tx ty
+        w="$(adb shell wm size 2>/dev/null | tr -d '\r' | grep -oE '[0-9]+' | head -1)"
+        dens="$(adb shell wm density 2>/dev/null | tr -d '\r' | grep -oE '[0-9]+' | head -1)"
+        if [ -n "$w" ] && [ -n "$dens" ]; then
+            pxdp=$((dens / 160))
+            [ "$pxdp" -ge 1 ] || pxdp=1
+            tx=$((w - 24 * pxdp))
+            ty=$((56 * pxdp))
+            note "tapping toolbar settings at $tx,$ty (w=$w dens=$dens)"
+            adb shell input tap "$tx" "$ty" >/dev/null 2>&1
+            sleep 3
         fi
     fi
-    sleep 3
-    probe="$(adb exec-out uiautomator dump /dev/tty 2>&1 | head -c 400 | tr '\n' '|')"
-    if ui tap --text "Update holiday data" --timeout 20; then
-        logcat_wait_for 'Holiday data updated' 60 && return 0
+    if ! in_settings; then
+        # d-pad: climb into the toolbar and activate the settings button
+        for i in 1 2 3; do adb shell input keyevent 19 >/dev/null 2>&1; done
+        sleep 1
+        adb shell input keyevent 23 >/dev/null 2>&1
+        sleep 3
     fi
-    # uiautomator taps may fail on this image: navigate by d-pad instead.
-    # "Update holiday data" is the second-to-last preference row, so overshooting
-    # DOWN clamps the focus on the last row and a single UP lands on the target.
-    note "tap failed; trying d-pad navigation"
+    if ! in_settings; then
+        annotate_error "could not open the settings screen; focus: $(window_focus); UI now: $(ui_texts_summary)"
+        return 1
+    fi
+    note "settings screen open; navigating to Update holiday data"
     for i in $(seq 1 30); do
         adb shell input keyevent 20 >/dev/null 2>&1
     done
@@ -294,8 +310,11 @@ update_holiday_data_via_ui() {
     if logcat_wait_for 'Holiday data updated' 60; then
         return 0
     fi
-    annotate_error "holiday update never ran; settings dump: ${probe:0:350}"
-    annotate_error "focus: $(window_focus); UI now: $(ui_texts_summary)"
+    # last resort: uiautomator tap by text
+    if ui tap --text "Update holiday data" --timeout 15; then
+        logcat_wait_for 'Holiday data updated' 60 && return 0
+    fi
+    annotate_error "holiday update never ran; focus: $(window_focus)"
     return 1
 }
 
