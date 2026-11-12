@@ -53,11 +53,13 @@ crash_report() {
 }
 
 logcat_app_tail() {
-    adb logcat -d 2>/dev/null | grep -iE "deskclock|AlarmStateManager|AlarmService|AlarmKlaxon|HandleApiCalls|WorkdayAlarmScheduler|HolidayRepository|AlarmUpdateHandler|AlarmInitReceiver" | tail -n 15 | tr '\n' '|' | tail -c 700
+    adb logcat -d 2>/dev/null | grep -iE "deskclock|AlarmClock:|AlarmStateManager|AlarmKlaxon|HandleApiCalls|WorkdayAlarmScheduler|HolidayRepository|AlarmInitReceiver|Disabling parent|Deleting instance" | tail -n 15 | tr '\n' '|' | tail -c 700
 }
 
 window_focus() {
-    adb shell dumpsys window windows 2>/dev/null | tr -d '\r' | grep -E 'mCurrentFocus|mFocusedApp' | head -n 2 | tr '\n' '|' | cut -c1-250
+    { adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -iE 'mCurrentFocus|mFocusedWindow'
+      adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' | grep -iE 'topResumedActivity|ResumedActivity' | head -n 2
+    } | tr '\n' '|' | cut -c1-300
 }
 
 ui_texts_summary() {
@@ -184,37 +186,15 @@ VALUES ($h, $m, $bits, 0, 1, 'alarm-test', 'content://settings/system/alarm_soun
 # the alarm at ITS database time (workday type intact) and schedules the instance.
 # A uiautomator-driven UI switch is deliberately not used: uiautomator dumps came
 # back empty on the aosp_atd image.
-# Primary route: SET_ALARM intent carrying exactly the injected hour/minute/days.
-set_alarm_intent_toggle() { # <hour> <minute> <calendar-days-csv or "">
-    local h="$1" m="$2" days="$3" out
-    h=$((10#$h))
-    m=$((10#$m))
-    local args=(shell am start -a android.intent.action.SET_ALARM
-        --ei android.provider.AlarmClock.EXTRA_HOUR "$h"
-        --ei android.provider.AlarmClock.EXTRA_MINUTES "$m"
-        --ez android.provider.AlarmClock.EXTRA_SKIP_UI true)
-    if [ -n "$days" ]; then
-        args+=(--eia android.provider.AlarmClock.EXTRA_DAYS "$days")
-    fi
-    out="$(adb "${args[@]}" 2>&1 | tr '\r\n' '  ')"
-    note "SET_ALARM am output: ${out:0:250}"
-    if logcat_wait_for 'Updated alarm' 45; then
-        return 0
-    fi
-    if adb logcat -d 2>/dev/null | grep -q 'Created new alarm'; then
-        annotate_error "SET_ALARM selection mismatch: it created a new alarm instead of enabling ours; am: ${out:0:300}"
-        return 1
-    fi
-    annotate_error "SET_ALARM did not update the alarm; full am output: ${out:0:500}"
-    crash_report
-    return 1
-}
-
-# Fallback route: enable the alarm in the database, plant a STALE instance and deliver
-# BOOT_COMPLETED to AlarmInitReceiver. fixAlarmInstances sees the stale instance,
-# deletes it via deleteInstanceAndUpdateParent, and the production
-# asyncUpdateAlarm -> getNextAlarmTime path rebuilds and registers the next
-# workday-aware instance - the exact scheduling code under test.
+# Enable the alarm in the database, plant a STALE instance and deliver BOOT_COMPLETED
+# to AlarmInitReceiver. fixAlarmInstances sees the stale instance, deletes it via
+# deleteInstanceAndUpdateParent, and the production asyncUpdateAlarm ->
+# getNextAlarmTime path rebuilds and registers the next workday-aware instance - the
+# exact scheduling code under test. (The SET_ALARM intent is NOT used: on this image
+# am starts it cleanly but HandleApiCalls leaves no trace in logcat.)
+#
+# One-shot alarms (daysofweek 0) are disabled by updateParentAlarm during this
+# cleanup, so every scenario uses a repeating weekly pattern.
 boot_reschedule_toggle() { # <hour> <minute>
     local h=$((10#$1)) m=$((10#$2)) f y rest mon d out
     f="$(dev_date_field $(( $(dev_epoch) - 86400 )) F)"
@@ -237,11 +217,7 @@ VALUES ($y, $mon, $d, $h, $m, 1, 'alarm-test', 'content://settings/system/alarm_
     return 0
 }
 
-toggle_alarm_on() { # <hour> <minute> <calendar-days-csv or "">
-    if set_alarm_intent_toggle "$1" "$2" "$3"; then
-        return 0
-    fi
-    note "SET_ALARM route failed; trying the boot-reschedule route"
+toggle_alarm_on() { # <hour> <minute> <calendar-days-csv-or-empty; days are unused now>
     boot_reschedule_toggle "$1" "$2"
 }
 
@@ -282,8 +258,11 @@ XML
 
 update_holiday_data_via_ui() {
     # The debug build is debuggable, so the shell may start the unexported activity.
-    adb shell am start -n "$PKG/com.android.deskclock.settings.SettingsActivity" >/dev/null 2>&1
+    local amout probe
+    amout="$(adb shell am start -n "$PKG/com.android.deskclock.settings.SettingsActivity" 2>&1 | tr '\r\n' ' ')"
+    note "settings am start: ${amout:0:200}"
     sleep 4
+    probe="$(adb exec-out uiautomator dump /dev/tty 2>&1 | head -c 400 | tr '\n' '|')"
     if ui tap --text "Update holiday data" --timeout 20; then
         logcat_wait_for 'Holiday data updated' 60 && return 0
     fi
@@ -302,7 +281,9 @@ update_holiday_data_via_ui() {
     if logcat_wait_for 'Holiday data updated' 60; then
         return 0
     fi
-    annotate_error "holiday data update never ran; focus: $(window_focus); UI now: $(ui_texts_summary)"
+    annotate_error "holiday update never ran; am start: ${amout:0:250}"
+    annotate_error "settings screen dump: ${probe:0:350}"
+    annotate_error "focus: $(window_focus); UI now: $(ui_texts_summary)"
     return 1
 }
 
@@ -314,8 +295,10 @@ scenario_a() {
     target=$(( $(dev_epoch) + 180 ))
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
-    # Non-repeating one-shot alarm (daysofweek 0), no workday type.
-    prepare_alarm_db "$h" "$m" 0 0 || {
+    # A daily alarm with NO workday type. (A one-shot alarm would be disabled by
+    # updateParentAlarm when the boot path cleans up its stale instance, which is
+    # correct production behavior for one-shots, but not what this scenario tests.)
+    prepare_alarm_db "$h" "$m" 127 0 || {
         fail_scenario "A plain alarm" "database setup failed"
         snapshot scenario-a
         return
@@ -537,6 +520,10 @@ main() {
     ui_probe="$(adb shell 'command -v uiautomator || echo MISSING' 2>/dev/null | tr -d '\r')"
     dump_probe="$(adb exec-out uiautomator dump /dev/tty 2>&1 | head -c 150 | tr '\n' '|')"
     echo "::notice::uiautomator probe: binary='${ui_probe:-none}' dump=${dump_probe:-empty}"
+
+    adb shell settings put global window_animation_scale 0.0 >/dev/null 2>&1
+    adb shell settings put global transition_animation_scale 0.0 >/dev/null 2>&1
+    adb shell settings put global animator_duration_scale 0.0 >/dev/null 2>&1
 
     wake
     launch_app

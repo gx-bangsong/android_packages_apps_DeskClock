@@ -41,11 +41,13 @@ def sh(*args, timeout=60):
 def dump_xml():
     # /dev/tty avoids any dependency on emulated storage, which stripped test images
     # (aosp_atd) may not provide; the tool prints a banner line before the XML.
-    out = sh("adb", "exec-out", "uiautomator", "dump", "/dev/tty")
+    # uiautomator waits for the UI to go idle, so a short, hard timeout keeps a
+    # never-idle screen from stalling the whole selector loop.
+    out = sh("adb", "exec-out", "uiautomator", "dump", "/dev/tty", timeout=15)
     idx = out.find("<?xml")
     if idx >= 0:
         return out[idx:]
-    sh("adb", "shell", "uiautomator", "dump", "/data/local/tmp/alarm-test-ui.xml")
+    sh("adb", "shell", "uiautomator", "dump", "/data/local/tmp/alarm-test-ui.xml", timeout=15)
     return sh("adb", "exec-out", "cat", "/data/local/tmp/alarm-test-ui.xml")
 
 
