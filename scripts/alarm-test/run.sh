@@ -53,7 +53,7 @@ crash_report() {
 }
 
 logcat_app_tail() {
-    adb logcat -d 2>/dev/null | grep -iE "deskclock|AlarmStateManager|AlarmService|AlarmKlaxon|HandleApiCalls|WorkdayAlarmScheduler|HolidayRepository|AlarmUpdateHandler" | tail -n 15 | tr '\n' '|' | cut -c1-700
+    adb logcat -d 2>/dev/null | grep -iE "deskclock|AlarmStateManager|AlarmService|AlarmKlaxon|HandleApiCalls|WorkdayAlarmScheduler|HolidayRepository|AlarmUpdateHandler|AlarmInitReceiver" | tail -n 15 | tr '\n' '|' | tail -c 700
 }
 
 window_focus() {
@@ -184,7 +184,8 @@ VALUES ($h, $m, $bits, 0, 1, 'alarm-test', 'content://settings/system/alarm_soun
 # the alarm at ITS database time (workday type intact) and schedules the instance.
 # A uiautomator-driven UI switch is deliberately not used: uiautomator dumps came
 # back empty on the aosp_atd image.
-toggle_alarm_on() { # <hour> <minute> <calendar-days-csv or "">
+# Primary route: SET_ALARM intent carrying exactly the injected hour/minute/days.
+set_alarm_intent_toggle() { # <hour> <minute> <calendar-days-csv or "">
     local h="$1" m="$2" days="$3" out
     h=$((10#$h))
     m=$((10#$m))
@@ -196,21 +197,52 @@ toggle_alarm_on() { # <hour> <minute> <calendar-days-csv or "">
         args+=(--eia android.provider.AlarmClock.EXTRA_DAYS "$days")
     fi
     out="$(adb "${args[@]}" 2>&1 | tr '\r\n' '  ')"
-    if ! printf '%s' "$out" | grep -q 'Starting:'; then
-        annotate_error "SET_ALARM toggle failed: ${out:0:400}"
-        crash_report
-        return 1
+    note "SET_ALARM am output: ${out:0:250}"
+    if logcat_wait_for 'Updated alarm' 45; then
+        return 0
     fi
     if adb logcat -d 2>/dev/null | grep -q 'Created new alarm'; then
-        annotate_error "SET_ALARM matched nothing and CREATED a new alarm (selection mismatch); am: ${out:0:300}"
+        annotate_error "SET_ALARM selection mismatch: it created a new alarm instead of enabling ours; am: ${out:0:300}"
         return 1
     fi
-    if ! logcat_wait_for 'Updated alarm' 45; then
-        annotate_error "alarm not updated by SET_ALARM; app logcat: $(logcat_app_tail)"
+    annotate_error "SET_ALARM did not update the alarm; full am output: ${out:0:500}"
+    crash_report
+    return 1
+}
+
+# Fallback route: enable the alarm in the database, plant a STALE instance and deliver
+# BOOT_COMPLETED to AlarmInitReceiver. fixAlarmInstances sees the stale instance,
+# deletes it via deleteInstanceAndUpdateParent, and the production
+# asyncUpdateAlarm -> getNextAlarmTime path rebuilds and registers the next
+# workday-aware instance - the exact scheduling code under test.
+boot_reschedule_toggle() { # <hour> <minute>
+    local h=$((10#$1)) m=$((10#$2)) f y rest mon d out
+    f="$(dev_date_field $(( $(dev_epoch) - 86400 )) F)"
+    y="${f%%-*}"
+    rest="${f#*-}"
+    mon=$((10#${rest%%-*} - 1))     # Calendar months are zero-based
+    d="${rest##*-}"
+    db_exec "UPDATE alarm_templates SET enabled=1;
+INSERT INTO alarm_instances (year, month, day, hour, minutes, vibrate, label, ringtone, alarm_state, alarm_id, incvol)
+VALUES ($y, $mon, $d, $h, $m, 1, 'alarm-test', 'content://settings/system/alarm_sound', 0, (SELECT _id FROM alarm_templates LIMIT 1), 0);" || return 1
+    launch_app
+    sleep 4
+    out="$(adb shell am broadcast -a android.intent.action.BOOT_COMPLETED -n "$PKG/com.android.deskclock.AlarmInitReceiver" 2>&1 | tr '\r\n' ' ')"
+    note "BOOT_COMPLETED broadcast: ${out:0:200}"
+    if ! logcat_wait_for 'Fixing alarm instances' 45; then
+        annotate_error "boot reschedule did not run (broadcast: ${out:0:250}); app logcat: $(logcat_app_tail)"
         crash_report
         return 1
     fi
     return 0
+}
+
+toggle_alarm_on() { # <hour> <minute> <calendar-days-csv or "">
+    if set_alarm_intent_toggle "$1" "$2" "$3"; then
+        return 0
+    fi
+    note "SET_ALARM route failed; trying the boot-reschedule route"
+    boot_reschedule_toggle "$1" "$2"
 }
 
 verify_scheduled() {
@@ -252,11 +284,26 @@ update_holiday_data_via_ui() {
     # The debug build is debuggable, so the shell may start the unexported activity.
     adb shell am start -n "$PKG/com.android.deskclock.settings.SettingsActivity" >/dev/null 2>&1
     sleep 4
-    ui tap --text "Update holiday data" --timeout 30 || {
-        annotate_error "Update holiday data preference not found; focus: $(window_focus); UI now: $(ui_texts_summary)"
-        return 1
-    }
-    logcat_wait_for 'Holiday data updated' 60
+    if ui tap --text "Update holiday data" --timeout 20; then
+        logcat_wait_for 'Holiday data updated' 60 && return 0
+    fi
+    # uiautomator may be unavailable on stripped test images: navigate by d-pad.
+    # "Update holiday data" is the second-to-last preference row, so overshooting
+    # DOWN clamps the focus on the last row and a single UP lands on the target.
+    note "tap failed; trying d-pad navigation"
+    local i
+    for i in $(seq 1 30); do
+        adb shell input keyevent 20 >/dev/null 2>&1
+    done
+    sleep 1
+    adb shell input keyevent 19 >/dev/null 2>&1
+    sleep 1
+    adb shell input keyevent 23 >/dev/null 2>&1
+    if logcat_wait_for 'Holiday data updated' 60; then
+        return 0
+    fi
+    annotate_error "holiday data update never ran; focus: $(window_focus); UI now: $(ui_texts_summary)"
+    return 1
 }
 
 # --- scenarios ------------------------------------------------------------------
@@ -485,6 +532,11 @@ main() {
     else
         note "adb shell sanity: OK"
     fi
+
+    local ui_probe dump_probe
+    ui_probe="$(adb shell 'command -v uiautomator || echo MISSING' 2>/dev/null | tr -d '\r')"
+    dump_probe="$(adb exec-out uiautomator dump /dev/tty 2>&1 | head -c 150 | tr '\n' '|')"
+    echo "::notice::uiautomator probe: binary='${ui_probe:-none}' dump=${dump_probe:-empty}"
 
     wake
     launch_app
