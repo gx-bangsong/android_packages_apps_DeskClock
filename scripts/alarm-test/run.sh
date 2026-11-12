@@ -197,6 +197,11 @@ VALUES ($h, $m, $bits, 0, 1, 'alarm-test', 'content://settings/system/alarm_soun
 # cleanup, so every scenario uses a repeating weekly pattern.
 boot_reschedule_toggle() { # <hour> <minute>
     local h=$((10#$1)) m=$((10#$2)) f y rest mon d out
+    # Stop the app first: a running process may hold stale alarm state in memory and
+    # write it back over the database rows injected below (scenario C hits this after
+    # its settings UI flow). The fresh launch a few lines below re-reads our rows.
+    stop_app
+    sleep 1
     f="$(dev_date_field $(( $(dev_epoch) - 86400 )) F)"
     y="${f%%-*}"
     rest="${f#*-}"
