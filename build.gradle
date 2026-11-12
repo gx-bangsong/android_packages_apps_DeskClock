@@ -30,18 +30,10 @@ android {
             manifest.srcFile 'AndroidManifest.xml'
         }
 
-        test {
-            java {
-                srcDirs = ['tests']
-                // The legacy AOSP UI tests (timer, uidata, worldclock, provider, ringtone) do
-                // not compile or run on the JVM after this fork's UI rework (e.g.
-                // TimerPagerAdapter is gone) and were never wired into CI. The alarm-test
-                // workflow targets the workday/holiday policy matrix, so only those packages
-                // compile as unit tests until the legacy tests are ported or removed.
-                include 'com/android/deskclock/workdays/**'
-                include 'com/android/deskclock/holiday/**'
-            }
-        }
+        // Unit tests live in the standard src/test/java (workday/holiday policy matrix).
+        // The legacy AOSP UI tests under tests/ do not compile against this fork's
+        // reworked UI (TimerPagerAdapter is gone, robolectric is not wired up) and are
+        // not part of any build.
     }
 
     buildFeatures {

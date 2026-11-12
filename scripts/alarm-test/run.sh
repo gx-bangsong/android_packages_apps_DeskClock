@@ -14,24 +14,27 @@
 #   E  statutory type + today is a make-up workday
 #      and the weekly pattern EXCLUDES today         -> must FIRE (comp day = workday)
 #
-# Alarm creation: scenario A first tries the public SET_ALARM intent; every scenario can
-# fall back to inserting the alarm row directly into the app database (via run-as, the
-# debug build is debuggable) and toggling it on through the real UI, which runs the same
-# asyncUpdateAlarm -> scheduling path. Annotations carry all failure evidence because
-# workflow log downloads may be blocked from restricted networks.
+# Alarm creation: every scenario inserts the alarm row directly into the app database
+# (via run-as on the debuggable build) and toggles the alarm on through the real UI
+# switch, which runs the production asyncUpdateAlarm -> scheduling path. The public
+# SET_ALARM intent is deliberately not used: with the stock sample alarms present it
+# just enables the first one at ITS default time (no search extras = match-all), so it
+# cannot place an alarm at a controlled time. Annotations carry all failure evidence
+# because workflow log downloads may be blocked from restricted networks.
 
 set -uo pipefail
 
 PKG="com.android.deskclock.dev"
 APK="${APK:-build/outputs/apk/debug/DeskClock-debug.apk}"
+# ClockDatabaseHelper opens the database through a device-protected storage context,
+# so it lives under /data/user_de (NOT the /data/user dir that run-as starts in).
+DB_PATH="/data/user_de/0/$PKG/databases/alarms.db"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIXTURES="$HERE/fixtures"
 LOGS="$HERE/logs"
 mkdir -p "$FIXTURES" "$LOGS"
 
 RESULTS=()
-LAST_AM=""
-SQLITE3_ON_DEVICE=""
 
 note() { echo "[alarm-test] $*"; }
 
@@ -117,48 +120,6 @@ snapshot() { # <label>
     adb shell dumpsys activity activities >"$LOGS/$1.dumpsys-activity.txt" 2>/dev/null
 }
 
-# --- alarm creation: SET_ALARM intent (scenario A primary) ----------------------
-
-create_alarm_via_intent() { # <hour> <minute> [calendar-day-ints csv]
-    local h="$1" m="$2" days="${3:-}"
-    # am --ei parses with Integer.decode(): leading zeros are treated as octal, so
-    # zero-padded values like "09" crash it with NumberFormatException. Force decimal.
-    h=$((10#$h))
-    m=$((10#$m))
-    local args=(shell am start -a android.intent.action.SET_ALARM
-        --ei android.provider.AlarmClock.EXTRA_HOUR "$h"
-        --ei android.provider.AlarmClock.EXTRA_MINUTES "$m"
-        --ez android.provider.AlarmClock.EXTRA_SKIP_UI true)
-    if [ -n "$days" ]; then
-        args+=(--eia android.provider.AlarmClock.EXTRA_DAYS "$days")
-    fi
-    LAST_AM="$(adb "${args[@]}" 2>&1 | tr '\r\n' '  ')"
-    note "am start output: ${LAST_AM:0:300}"
-    if ! printf '%s' "$LAST_AM" | grep -q 'Starting:'; then
-        # Retry as a single string through the shell (different adb code path).
-        local single
-        single="am start -a android.intent.action.SET_ALARM --ei android.provider.AlarmClock.EXTRA_HOUR $h --ei android.provider.AlarmClock.EXTRA_MINUTES $m --ez android.provider.AlarmClock.EXTRA_SKIP_UI true"
-        [ -n "$days" ] && single="$single --eia android.provider.AlarmClock.EXTRA_DAYS $days"
-        local second
-        second="$(adb shell "$single" 2>&1 | tr '\r\n' '  ')"
-        note "am single-string output: ${second:0:300}"
-        LAST_AM="$LAST_AM || $second"
-    fi
-}
-
-verify_alarm_created() {
-    if logcat_wait_for 'Created new alarm' 30; then
-        note "alarm creation confirmed (HandleApiCalls log)"
-        return 0
-    fi
-    if [ "$(adb shell dumpsys alarm 2>/dev/null | tr -d '\r' | grep -c "$PKG")" -gt 0 ]; then
-        note "alarm present in AlarmManager dump"
-        return 0
-    fi
-    annotate_error "intent alarm NOT created. am output: ${LAST_AM:0:500}"
-    return 1
-}
-
 # --- alarm creation: database insert + real UI toggle ---------------------------
 
 # Calendar day-of-week int (Mon=2..Sat=7, Sun=1) -> Weekdays bit (Mon=0x01..Sat=0x20, Sun=0x40)
@@ -179,12 +140,16 @@ db_exec() { # <sql>  (app must be stopped)
     # as an adb shell argument mangles the quotes (adb joins arguments and the device
     # shell re-splits them, producing "incomplete input" errors).
     local out
+    if ! adb shell run-as "$PKG" ls "$DB_PATH" >/dev/null 2>&1; then
+        annotate_error "database missing at $DB_PATH; dir contents: $(adb shell run-as "$PKG" ls /data/user_de/0/"$PKG"/databases/ 2>&1 | tr '\r\n' ' ')"
+        return 1
+    fi
     printf '%s\n' "$1" >/tmp/alarm-test.sql
     if ! adb push /tmp/alarm-test.sql /data/local/tmp/alarm-test.sql >/dev/null 2>&1; then
         annotate_error "pushing the sql file failed"
         return 1
     fi
-    out="$(adb shell "run-as $PKG sqlite3 databases/alarms.db '.read /data/local/tmp/alarm-test.sql'" 2>&1 | tr -d '\r')"
+    out="$(adb shell "run-as $PKG sqlite3 $DB_PATH '.read /data/local/tmp/alarm-test.sql'" 2>&1 | tr -d '\r')"
     if printf '%s' "$out" | grep -qi 'error\|denied\|not found'; then
         annotate_error "sqlite3 .read failed: ${out:0:400}"
         return 1
@@ -193,14 +158,14 @@ db_exec() { # <sql>  (app must be stopped)
 }
 
 # insert_alarm_db <hour> <minute> <weekdays-bits> <workday-type-int> [extra-sql]
-# The app must be RUNNING-then-STOPPED once (so the database exists), and stopped now.
+# The app must have run once (so the database exists) and be stopped now.
 insert_alarm_db() {
     local h="$1" m="$2" bits="$3" type="$4" extra="${5:-}"
-    db_exec "DELETE FROM instances; DELETE FROM alarms; $extra
-INSERT INTO alarms (hour, minutes, daysofweek, enabled, vibrate, label, ringtone,
-                    delete_after_use, increasing_volume, workday_type,
-                    shift_cycle_days, shift_start_date, shift_skip_holiday,
-                    shift_days_mask, shift_times)
+    db_exec "DELETE FROM alarm_instances; DELETE FROM alarm_templates; $extra
+INSERT INTO alarm_templates (hour, minutes, daysofweek, enabled, vibrate, label, ringtone,
+                             delete_after_use, incvol, workday_type,
+                             shift_cycle_days, shift_start_date, shift_skip_holiday,
+                             shift_days_mask, shift_times)
 VALUES ($h, $m, $bits, 0, 1, 'alarm-test', 'content://settings/system/alarm_sound',
         0, 0, $type, 7, '', 0, '', '');"
 }
@@ -279,37 +244,26 @@ update_holiday_data_via_ui() {
 
 scenario_a() {
     note "=== A: plain alarm, no workday logic -> must fire ==="
-    clear_app
-    sleep 2
-    wake
     local target h m
-    target=$(( $(dev_epoch) + 120 ))
+    target=$(( $(dev_epoch) + 180 ))
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
-    create_alarm_via_intent "$h" "$m" ""
-    if verify_alarm_created; then
-        note "A uses the SET_ALARM intent path"
-    else
-        note "A falls back to the database path"
-        launch_app
-        sleep 5
-        stop_app
-        insert_alarm_db "$h" "$m" 127 0 || {
-            fail_scenario "A plain alarm" "database fallback insert failed"
-            snapshot scenario-a
-            return
-        }
-        toggle_alarm_on_via_ui || {
-            fail_scenario "A plain alarm" "UI toggle failed"
-            snapshot scenario-a
-            return
-        }
-        verify_scheduled || {
-            fail_scenario "A plain alarm" "alarm not scheduled after toggle"
-            snapshot scenario-a
-            return
-        }
-    fi
+    # Non-repeating one-shot alarm (daysofweek 0), no workday type.
+    prepare_alarm_db "$h" "$m" 0 0 || {
+        fail_scenario "A plain alarm" "database setup failed"
+        snapshot scenario-a
+        return
+    }
+    toggle_alarm_on_via_ui || {
+        fail_scenario "A plain alarm" "UI toggle failed"
+        snapshot scenario-a
+        return
+    }
+    verify_scheduled || {
+        fail_scenario "A plain alarm" "alarm not scheduled after toggle"
+        snapshot scenario-a
+        return
+    }
     adb logcat -c
     if wait_fired 300; then
         pass_scenario "A plain alarm fired"
@@ -375,7 +329,6 @@ scenario_c() {
     cat >"$FIXTURES/holiday_c.json" <<JSON
 [{"name": "FixtureFutureHoliday", "startDate": "$future_start", "endDate": "$future_end", "compDays": []}]
 JSON
-    set_holiday_url_pref "http://10.0.2.2:8080/holiday_c.json"
     local target h m
     target=$(( $(dev_epoch) + 240 ))
     h="$(dev_date_field "$target" H)"
@@ -385,6 +338,9 @@ JSON
         snapshot scenario-c
         return
     }
+    # pm clear (inside prepare_alarm_db) wipes preferences, so the custom data URL is
+    # written after the database setup, while the app is stopped.
+    set_holiday_url_pref "http://10.0.2.2:8080/holiday_c.json"
     if ! update_holiday_data_via_ui; then
         fail_scenario "C third-party source" "data update through the UI failed"
         snapshot scenario-c
@@ -506,9 +462,6 @@ main() {
     else
         note "adb shell sanity: OK"
     fi
-
-    SQLITE3_ON_DEVICE="$(adb shell 'command -v sqlite3' 2>/dev/null | tr -d '\r')"
-    note "on-device sqlite3: '${SQLITE3_ON_DEVICE:-none}'"
 
     wake
     launch_app
