@@ -24,6 +24,10 @@
 
 set -uo pipefail
 
+# Bash exits silently on unbound variables and similar errors; surface the crash site
+# through an annotation because workflow log downloads may be unavailable.
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "::error::alarm-test aborted unexpectedly (rc=$rc, last command: $BASH_COMMAND)"; fi' EXIT
+
 PKG="com.android.deskclock.dev"
 APK="${APK:-build/outputs/apk/debug/DeskClock-debug.apk}"
 # ClockDatabaseHelper opens the database through a device-protected storage context,
@@ -286,7 +290,7 @@ prepare_alarm_db() {
     sleep 6
     stop_app
     sleep 1
-    insert_alarm_db "$1" "$2" "$3" "$4" "$5"
+    insert_alarm_db "$1" "$2" "$3" "$4" "${5:-}"
 }
 
 scenario_b() {
