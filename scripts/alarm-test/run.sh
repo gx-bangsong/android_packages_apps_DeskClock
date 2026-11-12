@@ -121,6 +121,10 @@ snapshot() { # <label>
 
 create_alarm_via_intent() { # <hour> <minute> [calendar-day-ints csv]
     local h="$1" m="$2" days="${3:-}"
+    # am --ei parses with Integer.decode(): leading zeros are treated as octal, so
+    # zero-padded values like "09" crash it with NumberFormatException. Force decimal.
+    h=$((10#$h))
+    m=$((10#$m))
     local args=(shell am start -a android.intent.action.SET_ALARM
         --ei android.provider.AlarmClock.EXTRA_HOUR "$h"
         --ei android.provider.AlarmClock.EXTRA_MINUTES "$m"
@@ -170,44 +174,21 @@ cal_to_bit() {
     esac
 }
 
-db_exec() { # <sql>  (app must be stopped; combined statements in one call)
-    local sql="$1"
-    if [ -n "$SQLITE3_ON_DEVICE" ]; then
-        local out
-        out="$(adb shell run-as "$PKG" sqlite3 databases/alarms.db "$sql" 2>&1 | tr -d '\r')"
-        if printf '%s' "$out" | grep -qi 'error\|denied\|not found'; then
-            annotate_error "on-device sqlite3 failed: ${out:0:300}"
-            return 1
-        fi
-        return 0
-    fi
-    local tmp
-    tmp="$(mktemp -d)"
-    adb shell run-as "$PKG" cat databases/alarms.db >"$tmp/alarms.db" 2>"$tmp/pullerr"
-    local size
-    size="$(wc -c <"$tmp/alarms.db" | tr -d ' ')"
-    if [ "${size:-0}" -lt 1024 ]; then
-        annotate_error "db pull suspicious (${size}B); run-as ls: $(adb shell run-as "$PKG" ls -la databases/ 2>&1 | tr '\r\n' ' ' | cut -c1-300)"
-        rm -rf "$tmp"
+db_exec() { # <sql>  (app must be stopped)
+    # The SQL travels in a file and is executed via sqlite3's .read command: passing it
+    # as an adb shell argument mangles the quotes (adb joins arguments and the device
+    # shell re-splits them, producing "incomplete input" errors).
+    local out
+    printf '%s\n' "$1" >/tmp/alarm-test.sql
+    if ! adb push /tmp/alarm-test.sql /data/local/tmp/alarm-test.sql >/dev/null 2>&1; then
+        annotate_error "pushing the sql file failed"
         return 1
     fi
-    if ! sqlite3 "$tmp/alarms.db" "$sql" 2>"$tmp/sqlerr"; then
-        annotate_error "host sqlite3 failed: $(head -c 300 "$tmp/sqlerr" | tr '\n' ' ')"
-        rm -rf "$tmp"
+    out="$(adb shell "run-as $PKG sqlite3 databases/alarms.db '.read /data/local/tmp/alarm-test.sql'" 2>&1 | tr -d '\r')"
+    if printf '%s' "$out" | grep -qi 'error\|denied\|not found'; then
+        annotate_error "sqlite3 .read failed: ${out:0:400}"
         return 1
     fi
-    adb push "$tmp/alarms.db" /data/local/tmp/alarm-test-alarms.db >/dev/null 2>&1 || {
-        annotate_error "adb push of patched db failed"
-        rm -rf "$tmp"
-        return 1
-    }
-    adb shell run-as "$PKG" sh -c \
-        'rm -f databases/alarms.db-wal databases/alarms.db-shm; cp /data/local/tmp/alarm-test-alarms.db databases/alarms.db' || {
-        annotate_error "run-as copy of patched db failed"
-        rm -rf "$tmp"
-        return 1
-    }
-    rm -rf "$tmp"
     return 0
 }
 
