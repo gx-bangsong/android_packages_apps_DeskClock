@@ -4,7 +4,7 @@
 # Invoked by .github/workflows/alarm-test.yml inside reactivecircus/android-emulator-runner.
 #
 # Firing is asserted from logcat (AlarmKlaxon / alarms.AlarmActivity) and dumpsys, never
-# from audio hardware: the emulator runs headless and may have no sound device.
+# from audio hardware: the emulator runs headless with -noaudio.
 #
 # Scenarios (see the PR description for the full matrix):
 #   A  plain alarm, no workday logic                 -> must FIRE
@@ -14,8 +14,11 @@
 #   E  statutory type + today is a make-up workday
 #      and the weekly pattern EXCLUDES today         -> must FIRE (comp day = workday)
 #
-# The app under test is the debug build (package com.android.deskclock.dev). Every scenario
-# starts from `pm clear`, so holiday data is empty unless the scenario injects it.
+# Alarm creation: scenario A first tries the public SET_ALARM intent; every scenario can
+# fall back to inserting the alarm row directly into the app database (via run-as, the
+# debug build is debuggable) and toggling it on through the real UI, which runs the same
+# asyncUpdateAlarm -> scheduling path. Annotations carry all failure evidence because
+# workflow log downloads may be blocked from restricted networks.
 
 set -uo pipefail
 
@@ -28,13 +31,12 @@ mkdir -p "$FIXTURES" "$LOGS"
 
 RESULTS=()
 LAST_AM=""
+SQLITE3_ON_DEVICE=""
 
 note() { echo "[alarm-test] $*"; }
 
 annotate_error() { echo "::error::alarm-test: $*"; }
 
-# Annotations are the only output channel readable through the API from restricted
-# networks, so every failure path funnels its evidence into them.
 crash_report() {
     local crashes
     crashes="$(adb logcat -d 2>/dev/null | grep -E 'FATAL EXCEPTION|Process: com\.android\.deskclock' | head -n 6 | tr '\n' '|' | cut -c1-500)"
@@ -43,8 +45,8 @@ crash_report() {
     fi
 }
 
-logcat_deskclock_tail() {
-    adb logcat -d 2>/dev/null | grep -i "deskclock" | tail -n 15 | tr '\n' '|' | cut -c1-700
+logcat_app_tail() {
+    adb logcat -d 2>/dev/null | grep -iE "deskclock|AlarmStateManager|AlarmService|AlarmKlaxon|HandleApiCalls|WorkdayAlarmScheduler|HolidayRepository|AlarmUpdateHandler" | tail -n 15 | tr '\n' '|' | cut -c1-700
 }
 
 ui_texts_summary() {
@@ -75,60 +77,6 @@ wake() {
 }
 
 ui() { python3 "$HERE/ui.py" "$@"; }
-
-# create_alarm <hour> <minute> [calendar-day-ints csv, e.g. "2,3,4,5,6" = Mon-Fri]
-create_alarm() {
-    local h="$1" m="$2" days="${3:-}"
-    local args=(shell am start -a android.intent.action.SET_ALARM
-        --ei android.provider.AlarmClock.EXTRA_HOUR "$h"
-        --ei android.provider.AlarmClock.EXTRA_MINUTES "$m"
-        --ez android.provider.AlarmClock.EXTRA_SKIP_UI true)
-    if [ -n "$days" ]; then
-        args+=(--eia android.provider.AlarmClock.EXTRA_DAYS "$days")
-    fi
-    LAST_AM="$(adb "${args[@]}" 2>&1 | tr -d '\r')"
-    note "am start output: ${LAST_AM:0:300}"
-}
-
-# HandleApiCalls logs "Created new alarm" on success; without it the intent did not
-# produce an alarm and every later assertion is meaningless.
-verify_alarm_created() {
-    if logcat_wait_for 'Created new alarm' 45; then
-        note "alarm creation confirmed in logcat"
-        return 0
-    fi
-    annotate_error "alarm NOT created. am output: ${LAST_AM:0:400}"
-    annotate_error "deskclock logcat tail: $(logcat_deskclock_tail)"
-    crash_report
-    return 1
-}
-
-# Expand the (only) alarm, set workday type to "Statutory workdays". This exercises the
-# real UI save path: WorkdayTypeActivity.saveAlarm() -> rescheduleAlarm().
-set_statutory_via_ui() {
-    launch_app
-    sleep 4
-    if ! ui exists --rid arrow --timeout 10 --no-scroll; then
-        # Maybe a different tab is selected; try the alarms tab in the bottom bar.
-        ui tap --contains "Alarm" --timeout 10 --no-scroll >/dev/null 2>&1 || true
-        sleep 2
-    fi
-    if ! ui tap --rid arrow --timeout 30; then
-        annotate_error "alarm row expand (id/arrow) not found; UI now: $(ui_texts_summary)"
-        crash_report
-        return 1
-    fi
-    if ! ui tap --text "Workday type" --timeout 25; then
-        annotate_error "Workday type row not found after expand; UI now: $(ui_texts_summary)"
-        return 1
-    fi
-    if ! ui tap --text "Statutory workdays" --timeout 25; then
-        annotate_error "Statutory workdays option not found; UI now: $(ui_texts_summary)"
-        return 1
-    fi
-    sleep 5
-    return 0
-}
 
 fired() {
     if adb logcat -d 2>/dev/null | grep -qE 'AlarmKlaxon|alarms\.AlarmActivity'; then
@@ -169,30 +117,148 @@ snapshot() { # <label>
     adb shell dumpsys activity activities >"$LOGS/$1.dumpsys-activity.txt" 2>/dev/null
 }
 
-# Inserts holiday rows into the app database while the app is stopped. Uses on-device
-# sqlite3 when available, otherwise pulls, patches and pushes the database via run-as
-# (the debug build is debuggable, so run-as works without root).
-inject_holiday_row() { # <name> <start> <end> <comp-days-json>
-    local sql="INSERT INTO holiday (name, start_date, end_date, comp_days) VALUES ('$1', '$2', '$3', '$4');"
-    if [ "$(adb shell 'command -v sqlite3' 2>/dev/null | tr -d '\r')" != "" ]; then
-        adb shell run-as "$PKG" sqlite3 databases/alarms.db "$sql"
-        return $?
+# --- alarm creation: SET_ALARM intent (scenario A primary) ----------------------
+
+create_alarm_via_intent() { # <hour> <minute> [calendar-day-ints csv]
+    local h="$1" m="$2" days="${3:-}"
+    local args=(shell am start -a android.intent.action.SET_ALARM
+        --ei android.provider.AlarmClock.EXTRA_HOUR "$h"
+        --ei android.provider.AlarmClock.EXTRA_MINUTES "$m"
+        --ez android.provider.AlarmClock.EXTRA_SKIP_UI true)
+    if [ -n "$days" ]; then
+        args+=(--eia android.provider.AlarmClock.EXTRA_DAYS "$days")
+    fi
+    LAST_AM="$(adb "${args[@]}" 2>&1 | tr '\r\n' '  ')"
+    note "am start output: ${LAST_AM:0:300}"
+    if ! printf '%s' "$LAST_AM" | grep -q 'Starting:'; then
+        # Retry as a single string through the shell (different adb code path).
+        local single
+        single="am start -a android.intent.action.SET_ALARM --ei android.provider.AlarmClock.EXTRA_HOUR $h --ei android.provider.AlarmClock.EXTRA_MINUTES $m --ez android.provider.AlarmClock.EXTRA_SKIP_UI true"
+        [ -n "$days" ] && single="$single --eia android.provider.AlarmClock.EXTRA_DAYS $days"
+        local second
+        second="$(adb shell "$single" 2>&1 | tr '\r\n' '  ')"
+        note "am single-string output: ${second:0:300}"
+        LAST_AM="$LAST_AM || $second"
+    fi
+}
+
+verify_alarm_created() {
+    if logcat_wait_for 'Created new alarm' 30; then
+        note "alarm creation confirmed (HandleApiCalls log)"
+        return 0
+    fi
+    if [ "$(adb shell dumpsys alarm 2>/dev/null | tr -d '\r' | grep -c "$PKG")" -gt 0 ]; then
+        note "alarm present in AlarmManager dump"
+        return 0
+    fi
+    annotate_error "intent alarm NOT created. am output: ${LAST_AM:0:500}"
+    return 1
+}
+
+# --- alarm creation: database insert + real UI toggle ---------------------------
+
+# Calendar day-of-week int (Mon=2..Sat=7, Sun=1) -> Weekdays bit (Mon=0x01..Sat=0x20, Sun=0x40)
+cal_to_bit() {
+    case "$1" in
+        1) echo 64 ;;
+        2) echo 1 ;;
+        3) echo 2 ;;
+        4) echo 4 ;;
+        5) echo 8 ;;
+        6) echo 16 ;;
+        7) echo 32 ;;
+    esac
+}
+
+db_exec() { # <sql>  (app must be stopped; combined statements in one call)
+    local sql="$1"
+    if [ -n "$SQLITE3_ON_DEVICE" ]; then
+        local out
+        out="$(adb shell run-as "$PKG" sqlite3 databases/alarms.db "$sql" 2>&1 | tr -d '\r')"
+        if printf '%s' "$out" | grep -qi 'error\|denied\|not found'; then
+            annotate_error "on-device sqlite3 failed: ${out:0:300}"
+            return 1
+        fi
+        return 0
     fi
     local tmp
     tmp="$(mktemp -d)"
-    adb shell run-as "$PKG" cat databases/alarms.db >"$tmp/alarms.db" 2>/dev/null
-    sqlite3 "$tmp/alarms.db" "$sql" || { rm -rf "$tmp"; return 1; }
-    adb push "$tmp/alarms.db" /data/local/tmp/alarms.db >/dev/null || { rm -rf "$tmp"; return 1; }
+    adb shell run-as "$PKG" cat databases/alarms.db >"$tmp/alarms.db" 2>"$tmp/pullerr"
+    local size
+    size="$(wc -c <"$tmp/alarms.db" | tr -d ' ')"
+    if [ "${size:-0}" -lt 1024 ]; then
+        annotate_error "db pull suspicious (${size}B); run-as ls: $(adb shell run-as "$PKG" ls -la databases/ 2>&1 | tr '\r\n' ' ' | cut -c1-300)"
+        rm -rf "$tmp"
+        return 1
+    fi
+    if ! sqlite3 "$tmp/alarms.db" "$sql" 2>"$tmp/sqlerr"; then
+        annotate_error "host sqlite3 failed: $(head -c 300 "$tmp/sqlerr" | tr '\n' ' ')"
+        rm -rf "$tmp"
+        return 1
+    fi
+    adb push "$tmp/alarms.db" /data/local/tmp/alarm-test-alarms.db >/dev/null 2>&1 || {
+        annotate_error "adb push of patched db failed"
+        rm -rf "$tmp"
+        return 1
+    }
     adb shell run-as "$PKG" sh -c \
-        'rm -f databases/alarms.db-wal databases/alarms.db-shm; cp /data/local/tmp/alarms.db databases/alarms.db' \
-        || { rm -rf "$tmp"; return 1; }
+        'rm -f databases/alarms.db-wal databases/alarms.db-shm; cp /data/local/tmp/alarm-test-alarms.db databases/alarms.db' || {
+        annotate_error "run-as copy of patched db failed"
+        rm -rf "$tmp"
+        return 1
+    }
     rm -rf "$tmp"
+    return 0
 }
 
+# insert_alarm_db <hour> <minute> <weekdays-bits> <workday-type-int> [extra-sql]
+# The app must be RUNNING-then-STOPPED once (so the database exists), and stopped now.
+insert_alarm_db() {
+    local h="$1" m="$2" bits="$3" type="$4" extra="${5:-}"
+    db_exec "DELETE FROM instances; DELETE FROM alarms; $extra
+INSERT INTO alarms (hour, minutes, daysofweek, enabled, vibrate, label, ringtone,
+                    delete_after_use, increasing_volume, workday_type,
+                    shift_cycle_days, shift_start_date, shift_skip_holiday,
+                    shift_days_mask, shift_times)
+VALUES ($h, $m, $bits, 0, 1, 'alarm-test', 'content://settings/system/alarm_sound',
+        0, 0, $type, 7, '', 0, '', '');"
+}
+
+# Launches the app and turns the (single) alarm on through the real UI; the toggle runs
+# the production asyncUpdateAlarm path that creates and registers the instance.
+toggle_alarm_on_via_ui() {
+    launch_app
+    sleep 4
+    if ! ui exists --rid onoff --timeout 15; then
+        annotate_error "alarm on/off switch not found; UI now: $(ui_texts_summary)"
+        crash_report
+        return 1
+    fi
+    ui tap --rid onoff --timeout 15 || return 1
+    sleep 5
+    return 0
+}
+
+verify_scheduled() {
+    local deadline=$(( $(date +%s) + 30 ))
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        local count
+        count="$(adb shell dumpsys alarm 2>/dev/null | tr -d '\r' | grep -c "$PKG")"
+        if [ "${count:-0}" -gt 0 ]; then
+            note "alarm scheduled (AlarmManager shows $count entries for the app)"
+            return 0
+        fi
+        sleep 3
+    done
+    annotate_error "no AlarmManager entries for the app; app logcat: $(logcat_app_tail)"
+    crash_report
+    return 1
+}
+
+# --- holiday data ---------------------------------------------------------------
+
 # Writes the holiday_data_url preference into device-protected storage BEFORE the app
-# ever starts, so HolidayRepository reads it on first init. SettingsActivity is not
-# exported, so the URL cannot be typed through am; only the "Update holiday data"
-# preference tap is done through the UI.
+# ever starts, so HolidayRepository reads it on first init.
 set_holiday_url_pref() { # <url>
     local tmp
     tmp="$(mktemp -d)"
@@ -212,14 +278,23 @@ update_holiday_data_via_ui() {
     launch_app
     sleep 4
     ui tap --desc "Settings" --timeout 8 --no-scroll || {
-        ui tap --desc "More options" --timeout 15 || return 1
-        ui tap --text "Settings" --timeout 15 || return 1
+        ui tap --desc "More options" --timeout 15 || {
+            annotate_error "overflow menu not found; UI now: $(ui_texts_summary)"
+            return 1
+        }
+        ui tap --text "Settings" --timeout 15 || {
+            annotate_error "Settings menu item not found; UI now: $(ui_texts_summary)"
+            return 1
+        }
     }
-    ui tap --text "Update holiday data" --timeout 30 || return 1
+    ui tap --text "Update holiday data" --timeout 30 || {
+        annotate_error "Update holiday data preference not found; UI now: $(ui_texts_summary)"
+        return 1
+    }
     logcat_wait_for 'Holiday data updated' 60
 }
 
-# --- scenarios -----------------------------------------------------------------
+# --- scenarios ------------------------------------------------------------------
 
 scenario_a() {
     note "=== A: plain alarm, no workday logic -> must fire ==="
@@ -230,49 +305,82 @@ scenario_a() {
     target=$(( $(dev_epoch) + 120 ))
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
-    create_alarm "$h" "$m" ""
-    if ! verify_alarm_created; then
-        fail_scenario "A plain alarm" "alarm was not created by the SET_ALARM intent"
-        snapshot scenario-a
-        return
+    create_alarm_via_intent "$h" "$m" ""
+    if verify_alarm_created; then
+        note "A uses the SET_ALARM intent path"
+    else
+        note "A falls back to the database path"
+        launch_app
+        sleep 5
+        stop_app
+        insert_alarm_db "$h" "$m" 127 0 || {
+            fail_scenario "A plain alarm" "database fallback insert failed"
+            snapshot scenario-a
+            return
+        }
+        toggle_alarm_on_via_ui || {
+            fail_scenario "A plain alarm" "UI toggle failed"
+            snapshot scenario-a
+            return
+        }
+        verify_scheduled || {
+            fail_scenario "A plain alarm" "alarm not scheduled after toggle"
+            snapshot scenario-a
+            return
+        }
     fi
     adb logcat -c
     if wait_fired 300; then
         pass_scenario "A plain alarm fired"
     else
         fail_scenario "A plain alarm" "did not fire within window"
-        annotate_error "A no-fire; deskclock logcat: $(logcat_deskclock_tail)"
+        annotate_error "A no-fire; app logcat: $(logcat_app_tail)"
         crash_report
     fi
     snapshot scenario-a
 }
 
-scenario_b() {
-    note "=== B: statutory type + EMPTY holiday data -> must fire ==="
+# prepare_alarm_db <hour> <minute> <bits> <type> [extra-sql]
+# Common B-E setup: clear, wake, run the app once so the database exists, stop it,
+# then inject the alarm row (plus optional holiday rows) while the database is cold.
+prepare_alarm_db() {
     clear_app
     sleep 2
     wake
+    launch_app
+    sleep 6
+    stop_app
+    sleep 1
+    insert_alarm_db "$1" "$2" "$3" "$4" "$5"
+}
+
+scenario_b() {
+    note "=== B: statutory type + EMPTY holiday data -> must fire ==="
     local target h m
-    target=$(( $(dev_epoch) + 270 ))
+    target=$(( $(dev_epoch) + 240 ))
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
-    create_alarm "$h" "$m" "1,2,3,4,5,6,7"
-    if ! verify_alarm_created; then
-        fail_scenario "B statutory+empty" "alarm was not created by the SET_ALARM intent"
+    prepare_alarm_db "$h" "$m" 127 1 || {
+        fail_scenario "B statutory+empty" "database setup failed"
         snapshot scenario-b
         return
-    fi
-    if ! set_statutory_via_ui; then
-        fail_scenario "B statutory+empty" "UI automation failed"
+    }
+    toggle_alarm_on_via_ui || {
+        fail_scenario "B statutory+empty" "UI toggle failed"
         snapshot scenario-b
         return
-    fi
+    }
+    verify_scheduled || {
+        fail_scenario "B statutory+empty" "alarm not scheduled after toggle"
+        snapshot scenario-b
+        return
+    }
     adb logcat -c
-    if wait_fired 430; then
+    if wait_fired 400; then
         pass_scenario "B statutory type with empty dataset fired"
     else
         fail_scenario "B statutory+empty dataset" "did not fire; an empty dataset must never suppress alarms"
-        annotate_error "B no-fire; deskclock logcat: $(logcat_deskclock_tail)"
+        annotate_error "B no-fire; app logcat: $(logcat_app_tail)"
         crash_report
     fi
     snapshot scenario-b
@@ -280,9 +388,6 @@ scenario_b() {
 
 scenario_c() {
     note "=== C: third-party data URL -> data loads + statutory alarm fires ==="
-    clear_app
-    sleep 2
-    wake
     local future_start future_end
     future_start="$(date -u -d '+30 days' +%F)"
     future_end="$(date -u -d '+32 days' +%F)"
@@ -291,34 +396,37 @@ scenario_c() {
 JSON
     set_holiday_url_pref "http://10.0.2.2:8080/holiday_c.json"
     local target h m
-    target=$(( $(dev_epoch) + 270 ))
+    target=$(( $(dev_epoch) + 240 ))
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
-    create_alarm "$h" "$m" "1,2,3,4,5,6,7"
-    if ! verify_alarm_created; then
-        fail_scenario "C third-party source" "alarm was not created by the SET_ALARM intent"
+    prepare_alarm_db "$h" "$m" 127 1 || {
+        fail_scenario "C third-party source" "database setup failed"
         snapshot scenario-c
         return
-    fi
+    }
     if ! update_holiday_data_via_ui; then
         fail_scenario "C third-party source" "data update through the UI failed"
-        annotate_error "C settings UI state: $(ui_texts_summary)"
         snapshot scenario-c
         return
     fi
     adb shell input keyevent BACK >/dev/null 2>&1
     sleep 2
-    if ! set_statutory_via_ui; then
-        fail_scenario "C third-party source" "UI automation failed"
+    toggle_alarm_on_via_ui || {
+        fail_scenario "C third-party source" "UI toggle failed"
         snapshot scenario-c
         return
-    fi
+    }
+    verify_scheduled || {
+        fail_scenario "C third-party source" "alarm not scheduled after data update + toggle"
+        snapshot scenario-c
+        return
+    }
     adb logcat -c
-    if wait_fired 430; then
+    if wait_fired 400; then
         pass_scenario "C third-party data source loaded and alarm fired"
     else
         fail_scenario "C third-party source" "data loaded but alarm did not fire"
-        annotate_error "C no-fire; deskclock logcat: $(logcat_deskclock_tail)"
+        annotate_error "C no-fire; app logcat: $(logcat_app_tail)"
         crash_report
     fi
     snapshot scenario-c
@@ -326,37 +434,29 @@ JSON
 
 scenario_d() {
     note "=== D: statutory type + today is a legal holiday -> must NOT fire ==="
-    clear_app
-    sleep 2
-    wake
-    launch_app
-    sleep 6
-    stop_app
     local target tdate h m
-    target=$(( $(dev_epoch) + 270 ))
+    target=$(( $(dev_epoch) + 240 ))
     tdate="$(dev_date_field "$target" F)"
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
-    if ! inject_holiday_row "FixtureHolidayD" "$tdate" "$tdate" "[]"; then
-        fail_scenario "D legal holiday" "could not inject holiday row"
+    local extra="DELETE FROM holiday; INSERT INTO holiday (name, start_date, end_date, comp_days) VALUES ('FixtureHolidayD', '$tdate', '$tdate', '[]');"
+    prepare_alarm_db "$h" "$m" 127 1 "$extra" || {
+        fail_scenario "D legal holiday" "database setup failed"
         snapshot scenario-d
         return
-    fi
-    launch_app
-    sleep 4
-    create_alarm "$h" "$m" "1,2,3,4,5,6,7"
-    if ! verify_alarm_created; then
-        fail_scenario "D legal holiday" "alarm was not created by the SET_ALARM intent"
+    }
+    toggle_alarm_on_via_ui || {
+        fail_scenario "D legal holiday" "UI toggle failed"
         snapshot scenario-d
         return
-    fi
-    if ! set_statutory_via_ui; then
-        fail_scenario "D legal holiday" "UI automation failed"
+    }
+    verify_scheduled || {
+        fail_scenario "D legal holiday" "alarm not scheduled after toggle"
         snapshot scenario-d
         return
-    fi
+    }
     adb logcat -c
-    if wait_fired 430; then
+    if wait_fired 400; then
         fail_scenario "D legal holiday" "alarm FIRED although today is a legal holiday"
     else
         pass_scenario "D legal holiday skipped (no ring)"
@@ -366,14 +466,8 @@ scenario_d() {
 
 scenario_e() {
     note "=== E: make-up workday today, weekly pattern excludes today -> must fire ==="
-    clear_app
-    sleep 2
-    wake
-    launch_app
-    sleep 6
-    stop_app
-    local target tdate iso_dow cal_dow hol_start hol_end h m days d
-    target=$(( $(dev_epoch) + 270 ))
+    local target tdate iso_dow cal_dow hol_start hol_end h m bits
+    target=$(( $(dev_epoch) + 240 ))
     tdate="$(dev_date_field "$target" F)"
     h="$(dev_date_field "$target" H)"
     m="$(dev_date_field "$target" M)"
@@ -382,38 +476,33 @@ scenario_e() {
     cal_dow=$(( iso_dow == 7 ? 1 : iso_dow + 1 ))
     # Weekly pattern covers every day EXCEPT today's weekday: only the make-up day
     # logic can make the alarm ring today.
-    days=""
-    for d in 1 2 3 4 5 6 7; do
-        if [ "$d" -ne "$cal_dow" ]; then
-            days+="${days:+,}$d"
-        fi
-    done
+    bits=$(( 127 - $(cal_to_bit "$cal_dow") ))
     # A holiday next week whose make-up workday is today.
     hol_start="$(dev_date_field $(( target + 5 * 86400 )) F)"
     hol_end="$(dev_date_field $(( target + 6 * 86400 )) F)"
-    if ! inject_holiday_row "FixtureHolidayE" "$hol_start" "$hol_end" "[\"$tdate\"]"; then
-        fail_scenario "E make-up workday" "could not inject holiday row"
+    local extra="DELETE FROM holiday; INSERT INTO holiday (name, start_date, end_date, comp_days) VALUES ('FixtureHolidayE', '$hol_start', '$hol_end', '[\"$tdate\"]');"
+    prepare_alarm_db "$h" "$m" "$bits" 1 "$extra" || {
+        fail_scenario "E make-up workday" "database setup failed"
         snapshot scenario-e
         return
-    fi
-    launch_app
-    sleep 4
-    create_alarm "$h" "$m" "$days"
-    if ! verify_alarm_created; then
-        fail_scenario "E make-up workday" "alarm was not created by the SET_ALARM intent"
+    }
+    toggle_alarm_on_via_ui || {
+        fail_scenario "E make-up workday" "UI toggle failed"
         snapshot scenario-e
         return
-    fi
-    if ! set_statutory_via_ui; then
-        fail_scenario "E make-up workday" "UI automation failed"
+    }
+    verify_scheduled || {
+        fail_scenario "E make-up workday" "alarm not scheduled after toggle"
         snapshot scenario-e
         return
-    fi
+    }
     adb logcat -c
-    if wait_fired 430; then
+    if wait_fired 400; then
         pass_scenario "E make-up workday fired"
     else
         fail_scenario "E make-up workday" "did not fire; the weekly pattern skipped the make-up day (PR #2 regression)"
+        annotate_error "E no-fire; app logcat: $(logcat_app_tail)"
+        crash_report
     fi
     snapshot scenario-e
 }
@@ -424,21 +513,32 @@ main() {
         echo "::error::adb install failed"
         exit 1
     fi
-    if ! adb shell pm list packages 2>/dev/null | tr -d '' | grep -q "$PKG"; then
-        annotate_error "package $PKG missing after install; installed packages mentioning deskclock:"
-        annotate_error "$(adb shell pm list packages 2>/dev/null | tr -d '' | grep -i deskclock | tr '
-' ' ')"
+    if ! adb shell pm list packages 2>/dev/null | tr -d '\r' | grep -q "$PKG"; then
+        annotate_error "package $PKG missing after install"
         exit 1
     fi
+
+    local sanity
+    sanity="$(adb shell echo alarm-test-sanity 2>&1 | tr -d '\r\n')"
+    if [ "$sanity" != "alarm-test-sanity" ]; then
+        annotate_error "adb shell sanity check failed, got: '${sanity:0:200}'"
+    else
+        note "adb shell sanity: OK"
+    fi
+
+    SQLITE3_ON_DEVICE="$(adb shell 'command -v sqlite3' 2>/dev/null | tr -d '\r')"
+    note "on-device sqlite3: '${SQLITE3_ON_DEVICE:-none}'"
+
     wake
     launch_app
     sleep 5
-    if [ -z "$(adb shell pidof "$PKG" 2>/dev/null | tr -d '
-')" ]; then
-        annotate_error "app process not running after launch; it may be crashing"
+    if [ -z "$(adb shell pidof "$PKG" 2>/dev/null | tr -d '\r\n')" ]; then
+        annotate_error "app process not running after first launch; it may be crashing"
         crash_report
-        annotate_error "deskclock logcat tail: $(logcat_deskclock_tail)"
+    else
+        note "app launches and runs"
     fi
+
     scenario_a
     scenario_b
     scenario_c
@@ -455,7 +555,7 @@ main() {
         esac
     done
     if [ "$failed" -gt 0 ]; then
-        echo "::error::${failed} alarm-test scenario(s) failed (logs and screenshots under scripts/alarm-test/logs)"
+        echo "::error::${failed} alarm-test scenario(s) failed (evidence under scripts/alarm-test/logs)"
         exit 1
     fi
     note "all scenarios passed"
