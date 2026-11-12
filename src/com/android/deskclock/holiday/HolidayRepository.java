@@ -99,6 +99,9 @@ public final class HolidayRepository implements HolidayProvider {
                 PreferenceManager.getDefaultSharedPreferencesName(storageContext),
                 Context.MODE_PRIVATE);
         mHolidays = loadFromDatabase();
+        // Startup visibility: an empty dataset (failed downloads, wiped storage) must be
+        // visible in logcat so "alarm did not ring" reports can be diagnosed.
+        LOGGER.i("Holiday dataset loaded: %d entries", mHolidays.size());
     }
 
     /**

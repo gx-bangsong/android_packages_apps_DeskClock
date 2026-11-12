@@ -1,0 +1,2 @@
+# Holiday fixtures for the alarm-test workflow are generated at runtime by
+# scripts/alarm-test/run.sh (they depend on the emulator's current date).

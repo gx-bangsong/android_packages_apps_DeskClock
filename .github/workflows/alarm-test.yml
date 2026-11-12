@@ -1,0 +1,113 @@
+# Alarm / workday / holiday integration tests.
+#
+# Two jobs:
+#   policy-matrix - JVM unit tests (WorkdayPolicy, HolidayDataParser, ShiftScheduler):
+#                   scenario D/E/F logic plus parser compatibility, fast and deterministic.
+#   alarm-test     - API 35 emulator firing matrix (scenarios A-E, see
+#                   scripts/alarm-test/run.sh). Firing is asserted from logcat and
+#                   dumpsys, never from audio hardware, so the emulator keeps -noaudio.
+#
+# Modeled on the CI used by gx-bangsong/GKUIPhotos (JDK 17 + Gradle cache + unit tests +
+# APK artifact), with the emulator setup from the reactivecircus/android-emulator-runner
+# documentation.
+name: alarm-test
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  policy-matrix:
+    name: workday policy JVM matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+          cache: gradle
+
+      - name: Run workday/holiday unit tests
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew testDebugUnitTest --stacktrace 2>&1 | tee build.log || {
+            ERR=$(grep -E 'FAILED|FAILURE:|Caused by:' build.log -A 4 | head -n 30 | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 ._/:=-]/ /g')
+            echo "::error::$ERR"
+            exit 1
+          }
+
+      - name: Publish test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-matrix-test-reports
+          path: build/reports/tests/**
+
+  alarm-test:
+    name: emulator firing matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+          cache: gradle
+
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskClock-debug-apk
+          path: build/outputs/apk/debug/DeskClock-debug.apk
+          if-no-files-found: error
+
+      # Linux runners expose /dev/kvm; the udev rule makes it usable for the runner user
+      # (reactivecircus/android-emulator-runner documentation).
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      # Fixture server for scenario C ("third-party data source"): the emulator reaches
+      # the host loopback as 10.0.2.2.
+      - name: Start holiday fixture server
+        run: |
+          mkdir -p scripts/alarm-test/fixtures
+          nohup python3 -m http.server 8080 --directory scripts/alarm-test/fixtures >/tmp/fixture-server.log 2>&1 &
+          sleep 1
+          curl -fs http://127.0.0.1:8080/ >/dev/null && echo "fixture server up"
+
+      - name: Run the alarm firing matrix
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: aosp_atd
+          arch: x86_64
+          # -noaudio stays: firing is asserted from logcat/dumpsys, not from audio.
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -noaudio -camera-back none
+          disable-animations: true
+          script: bash scripts/alarm-test/run.sh
+
+      - name: Publish scenario logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alarm-test-evidence
+          path: |
+            scripts/alarm-test/logs/**
+            /tmp/fixture-server.log
+          if-no-files-found: warn

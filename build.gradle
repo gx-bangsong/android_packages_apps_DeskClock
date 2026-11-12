@@ -60,6 +60,9 @@ dependencies {
     implementation 'androidx.test:core:1.5.0'
     implementation 'androidx.test:rules:1.5.0'
     testImplementation 'junit:junit:4.13.2'
+    // android.jar's org.json classes are stubbed in local unit tests; the real implementation
+    // is needed for HolidayDataParserTest (and the code it exercises) to run on the JVM.
+    testImplementation 'org.json:json:20240303'
 }
 
 tasks.withType(JavaCompile) {
