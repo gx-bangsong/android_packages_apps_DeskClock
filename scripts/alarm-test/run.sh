@@ -257,20 +257,33 @@ XML
 }
 
 update_holiday_data_via_ui() {
-    # The debug build is debuggable, so the shell may start the unexported activity.
-    local amout probe
-    amout="$(adb shell am start -n "$PKG/com.android.deskclock.settings.SettingsActivity" 2>&1 | tr '\r\n' ' ')"
-    note "settings am start: ${amout:0:200}"
-    sleep 4
+    # The settings activity is not exported, so it must be reached through the app:
+    # toolbar settings icon (fallback: overflow menu), then the update preference.
+    local probe i
+    launch_app
+    sleep 5
+    # belt and braces: dismiss a permission dialog if one still showed up
+    ui tap --text "Allow" --timeout 8 --no-scroll 2>/dev/null
+    if ! ui tap --desc "Settings" --timeout 15 --no-scroll; then
+        if ui tap --desc "More options" --timeout 15 --no-scroll; then
+            ui tap --text "Settings" --timeout 15 || {
+                annotate_error "Settings menu item not found; UI now: $(ui_texts_summary)"
+                return 1
+            }
+        else
+            annotate_error "settings entry not found; UI now: $(ui_texts_summary)"
+            return 1
+        fi
+    fi
+    sleep 3
     probe="$(adb exec-out uiautomator dump /dev/tty 2>&1 | head -c 400 | tr '\n' '|')"
     if ui tap --text "Update holiday data" --timeout 20; then
         logcat_wait_for 'Holiday data updated' 60 && return 0
     fi
-    # uiautomator may be unavailable on stripped test images: navigate by d-pad.
+    # uiautomator taps may fail on this image: navigate by d-pad instead.
     # "Update holiday data" is the second-to-last preference row, so overshooting
     # DOWN clamps the focus on the last row and a single UP lands on the target.
     note "tap failed; trying d-pad navigation"
-    local i
     for i in $(seq 1 30); do
         adb shell input keyevent 20 >/dev/null 2>&1
     done
@@ -281,8 +294,7 @@ update_holiday_data_via_ui() {
     if logcat_wait_for 'Holiday data updated' 60; then
         return 0
     fi
-    annotate_error "holiday update never ran; am start: ${amout:0:250}"
-    annotate_error "settings screen dump: ${probe:0:350}"
+    annotate_error "holiday update never ran; settings dump: ${probe:0:350}"
     annotate_error "focus: $(window_focus); UI now: $(ui_texts_summary)"
     return 1
 }
