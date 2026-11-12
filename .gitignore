@@ -6,3 +6,6 @@
 /build
 /captures
 /system_libs
+/scripts/alarm-test/logs/
+/scripts/alarm-test/fixtures/*.json
+__pycache__/
